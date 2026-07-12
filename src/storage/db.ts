@@ -512,6 +512,19 @@ export async function setReadingState(
   emitPaperChanged(paperId)
 }
 
+/** Erase every object store — the "start as a new user" reset for shared
+ *  devices or account switches. Does not fire sync hooks. */
+export async function wipeAllData(): Promise<void> {
+  const db = await openDb()
+  const names = Object.values(STORES)
+  const tx = db.transaction(names, 'readwrite')
+  for (const name of names) tx.objectStore(name).clear()
+  await new Promise<void>((resolve, reject) => {
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error ?? new Error('초기화에 실패했습니다'))
+  })
+}
+
 // ---------- storage housekeeping ----------
 
 export async function requestPersistentStorage(): Promise<boolean> {

@@ -45,9 +45,13 @@ import {
   applyRemoteMeta,
   buildLibrarySnapshot,
   buildPaperMeta,
-  computeLocalUpdatedAt
+  computeLocalUpdatedAt,
+  localLibraryHasStructure
 } from './localData'
+import { libraryHasStructure, shouldApplyRemoteLibrary } from './librarySyncPolicy'
 import { sha256Hex, type LibraryJson, type PaperMeta } from './format'
+import { sha256 } from '@noble/hashes/sha256'
+import { bytesToHex } from '@noble/hashes/utils'
 import { markDriveDirty, markDriveLibraryDirty } from './driveSync'
 
 const LIBRARY_ID = '__library__'
@@ -350,7 +354,7 @@ async function pushDeletion(paperId: string, dataSourceId: string): Promise<void
 async function restorePdfFromNotion(
   paperId: string,
   attachments: StoredAttachment[]
-): Promise<Uint8Array> {
+): Promise<{ blob: Blob; sha256: string }> {
   const manifestFile = attachments.find((file) => file.name.endsWith('.manifest.json'))
   if (!manifestFile) {
     const pdf = attachments.find((file) => file.name.toLowerCase().endsWith('.pdf'))
@@ -358,32 +362,39 @@ async function restorePdfFromNotion(
     const content = await downloadNotionFile(pdf.url)
     const head = decoder.decode(content.subarray(0, 1024))
     if (!head.includes('%PDF-')) throw new Error(`Notion paper ${paperId} is not a valid PDF.`)
-    return content
+    return {
+      blob: new Blob([Uint8Array.from(content).buffer], { type: 'application/pdf' }),
+      sha256: bytesToHex(sha256(content))
+    }
   }
 
   const manifest = parseNotionPdfManifest(await downloadNotionFile(manifestFile.url))
   if (manifest.paperId !== paperId) throw new Error('Notion PDF manifest paper ID mismatch.')
   const attachmentByName = new Map(attachments.map((file) => [file.name, file]))
-  const restored = new Uint8Array(manifest.originalSize)
-  let restoredSize = 0
+  // Assemble via incremental Blob concatenation and a streaming hash so the
+  // JS heap only ever holds one chunk (mobile browsers may kill the tab if
+  // we materialize a large PDF as a single Uint8Array).
+  const hasher = sha256.create()
+  let blob = new Blob([], { type: 'application/pdf' })
   for (const descriptor of manifest.chunks) {
     const stored = attachmentByName.get(descriptor.archiveFilename)
     if (!stored) throw new Error(`Notion PDF part ${descriptor.index + 1} is missing.`)
     const archive = await downloadNotionFile(stored.url)
     const payload = await extractAndVerifyNotionChunk(descriptor, archive)
-    if (restoredSize + payload.byteLength > manifest.originalSize) {
+    if (blob.size + payload.byteLength > manifest.originalSize) {
       throw new Error('Restored Notion PDF is larger than its manifest.')
     }
-    restored.set(payload, restoredSize)
-    restoredSize += payload.byteLength
+    hasher.update(payload)
+    blob = new Blob([blob, Uint8Array.from(payload).buffer], { type: 'application/pdf' })
   }
-  if (restoredSize !== manifest.originalSize) {
+  if (blob.size !== manifest.originalSize) {
     throw new Error('Restored Notion PDF size does not match its manifest.')
   }
-  if ((await sha256Hex(restored)) !== manifest.originalSha256) {
+  const digest = bytesToHex(hasher.digest())
+  if (digest !== manifest.originalSha256) {
     throw new Error('Restored Notion PDF checksum does not match its manifest.')
   }
-  return restored
+  return { blob, sha256: digest }
 }
 
 async function pullNotionPages(dataSourceId: string): Promise<boolean> {
@@ -424,20 +435,16 @@ async function pullNotionPages(dataSourceId: string): Promise<boolean> {
 
     if (!localPaper) {
       const fullPage = await retrieveNotionPage(page.id)
-      const pdfBytes = await restorePdfFromNotion(
+      const { blob: pdfBlob, sha256: actualHash } = await restorePdfFromNotion(
         aiCoreId,
         readStoredAttachments(fullPage, 'PDF')
       )
-      const actualHash = await sha256Hex(pdfBytes)
       if (meta.paper.content_hash && meta.paper.content_hash !== actualHash) {
         throw new Error(`Notion PDF checksum mismatch for paper ${aiCoreId}.`)
       }
       meta.paper.content_hash = actualHash
-      meta.paper.file_size = pdfBytes.byteLength
-      await db.savePdfFile(
-        aiCoreId,
-        new Blob([Uint8Array.from(pdfBytes).buffer], { type: 'application/pdf' })
-      )
+      meta.paper.file_size = pdfBlob.size
+      await db.savePdfFile(aiCoreId, pdfBlob)
       await applyRemoteMeta(meta)
       removeDirty('notionDirty', aiCoreId)
       if (usesGoogleDrive()) markDriveDirty(aiCoreId)
@@ -456,10 +463,17 @@ async function pullNotionPages(dataSourceId: string): Promise<boolean> {
     }
   }
 
+  const state = loadSyncState()
   if (
     remoteLibrary &&
-    remoteLibrary.updatedAt > loadSyncState().libraryUpdatedAt &&
-    notionLibraryRevisions.isCurrent(LIBRARY_REVISION_KEY, libraryRevision)
+    shouldApplyRemoteLibrary({
+      remoteUpdatedAt: remoteLibrary.updatedAt,
+      localUpdatedAt: state.libraryUpdatedAt,
+      remoteHasStructure: libraryHasStructure(remoteLibrary),
+      localHasStructure: await localLibraryHasStructure(),
+      localDirty: state.notionLibraryDirty || state.driveLibraryDirty,
+      revisionIsCurrent: notionLibraryRevisions.isCurrent(LIBRARY_REVISION_KEY, libraryRevision)
+    })
   ) {
     await applyLibrarySnapshot(remoteLibrary)
     updateSyncState({ notionLibraryDirty: false })
@@ -499,14 +513,6 @@ export function markNotionDirty(paperId: string): void {
 export function markNotionLibraryDirty(): void {
   notionLibraryRevisions.mark(LIBRARY_REVISION_KEY)
   updateSyncState({ libraryUpdatedAt: Date.now(), notionLibraryDirty: true })
-}
-
-export function markAllNotionDirty(paperIds: string[]): void {
-  for (const id of paperIds) {
-    notionPaperRevisions.mark(id)
-    addDirty('notionDirty', id)
-  }
-  markNotionLibraryDirty()
 }
 
 export function flushNotionDirty(): Promise<void> {

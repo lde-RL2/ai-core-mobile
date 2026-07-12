@@ -21,7 +21,7 @@ import {
   refreshNotionSyncStatus,
   testNotionConnection
 } from '../sync/notionSync'
-import { getLastSyncAt, markAllLocalDirty, syncNow } from '../sync/engine'
+import { firstSyncAfterConnect, getLastSyncAt, syncNow } from '../sync/engine'
 
 const TARGET_OPTIONS: { value: SyncTarget; label: string }[] = [
   { value: 'none', label: '사용 안 함' },
@@ -179,8 +179,10 @@ export function SyncSettings(): React.JSX.Element {
                         await driveSignIn()
                         refreshDriveSyncStatus()
                         setDriveEmail(await getAccountEmail().catch(() => null))
-                        await markAllLocalDirty()
-                        await syncNow()
+                        // Pull the remote library first so a fresh device
+                        // adopts it instead of overwriting it (desktop v1.1.11
+                        // folder-loss fix).
+                        await firstSyncAfterConnect()
                       })
                     }
                   >
@@ -238,17 +240,31 @@ export function SyncSettings(): React.JSX.Element {
               disabled={busy !== null}
               onClick={() =>
                 void run('Notion 연결', async () => {
+                  const previous = loadSyncState()
+                  const nextToken = tokenInput.trim() || previous.notionAccessToken
+                  const nextParent = parentPageInput.trim() || null
+                  // A different token or parent page targets a different
+                  // workspace — drop every cached database/page id so we
+                  // never keep writing into the old database.
+                  const workspaceChanged =
+                    nextToken !== previous.notionAccessToken ||
+                    nextParent !== previous.notionParentPageId
                   updateSyncState({
                     ...(hasBundledNotionProxy()
                       ? {}
                       : { notionProxyUrl: proxyInput.trim() || null }),
-                    ...(tokenInput.trim() ? { notionAccessToken: tokenInput.trim() } : {}),
-                    notionParentPageId: parentPageInput.trim() || null
+                    notionAccessToken: nextToken,
+                    notionParentPageId: nextParent,
+                    ...(workspaceChanged
+                      ? { notionDatabaseId: null, notionDataSourceId: null, notionPageIds: {} }
+                      : {})
                   })
                   setTokenInput('')
                   refreshNotionSyncStatus()
-                  await markAllLocalDirty()
+                  // testNotionConnection pulls the existing database first,
+                  // then firstSyncAfterConnect queues local-only content.
                   const result = await testNotionConnection()
+                  await firstSyncAfterConnect()
                   setMessage(`연결됨: ${result.workspace}`)
                 })
               }

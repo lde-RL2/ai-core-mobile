@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PaperTone, ThemeMode } from '../types'
-import { estimateStorage, requestPersistentStorage } from '../storage/db'
+import { estimateStorage, requestPersistentStorage, wipeAllData } from '../storage/db'
 import { downloadBackup, exportBackup, importBackup } from '../storage/backup'
 import { markAllLocalDirty } from '../sync/engine'
+import { driveSignOut } from '../sync/driveAuth'
+import { resetSyncState } from '../sync/state'
 import { SyncSettings } from './SyncSettings'
 
 interface SettingsScreenProps {
@@ -63,6 +65,30 @@ export function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
         `내보내기 실패: ${error instanceof Error ? error.message : String(error)}`
       )
     } finally {
+      setBusy(null)
+    }
+  }
+
+  async function handleReset(): Promise<void> {
+    if (
+      !window.confirm(
+        '이 기기의 모든 논문, 주석, 컬렉션, 동기화 설정을 삭제할까요?\n' +
+          'Drive/Notion에 동기화된 원격 데이터는 지우지 않습니다.'
+      )
+    ) {
+      return
+    }
+    if (!window.confirm('정말 삭제할까요? 백업하지 않은 데이터는 되돌릴 수 없습니다.')) return
+    setBusy('초기화 중…')
+    try {
+      await driveSignOut().catch(() => {})
+      await wipeAllData()
+      resetSyncState()
+      window.location.reload()
+    } catch (error) {
+      setBackupMessage(
+        `초기화 실패: ${error instanceof Error ? error.message : String(error)}`
+      )
       setBusy(null)
     }
   }
@@ -186,6 +212,21 @@ export function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
             PDF·주석·컬렉션·태그·읽기 상태가 모두 포함됩니다. 다른 기기의 AI-Core Mobile에서
             가져오면 라이브러리가 병합됩니다.
           </p>
+        </section>
+
+        <section className="settings-section">
+          <h2>새 사용자로 초기화</h2>
+          <p className="settings-note faint">
+            이 기기의 논문·주석·컬렉션·동기화 설정을 모두 삭제합니다. 공용 기기이거나 다른
+            계정으로 바꿀 때 사용하세요. 동기화된 원격 데이터(Drive/Notion)는 지우지 않습니다.
+          </p>
+          <button
+            className="danger-button"
+            disabled={busy !== null}
+            onClick={() => void handleReset()}
+          >
+            모든 로컬 데이터 삭제
+          </button>
         </section>
 
         <section className="settings-section">

@@ -99,6 +99,21 @@ export async function buildLibrarySnapshot(): Promise<LibraryJson> {
   )
 }
 
+export async function localLibraryHasStructure(): Promise<boolean> {
+  const [collections, paperCollections, tags, paperTags] = await Promise.all([
+    db.listCollections(),
+    db.listAllPaperCollectionLinks(),
+    db.listTags(),
+    db.listAllPaperTagLinks()
+  ])
+  return (
+    collections.length > 0 ||
+    paperCollections.length > 0 ||
+    tags.length > 0 ||
+    paperTags.length > 0
+  )
+}
+
 export async function applyLibrarySnapshot(library: LibraryJson): Promise<void> {
   await db.withSyncHooksSuppressed(async () => {
     await db.replaceLibrary({

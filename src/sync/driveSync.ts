@@ -29,8 +29,10 @@ import {
   buildLibrarySnapshot,
   buildPaperMeta,
   computeLocalUpdatedAt,
-  deleteLocalPaper
+  deleteLocalPaper,
+  localLibraryHasStructure
 } from './localData'
+import { libraryHasStructure, shouldApplyRemoteLibrary } from './librarySyncPolicy'
 import { META_SCHEMA_VERSION, sha256Hex, type LibraryJson, type PaperMeta } from './format'
 
 const encoder = new TextEncoder()
@@ -185,14 +187,6 @@ export function markDriveLibraryDirty(): void {
   updateSyncState({ libraryUpdatedAt: Date.now(), driveLibraryDirty: true })
 }
 
-export function markAllDriveDirty(paperIds: string[]): void {
-  for (const id of paperIds) {
-    drivePaperRevisions.mark(id)
-    addDirty('driveDirty', id)
-  }
-  markDriveLibraryDirty()
-}
-
 async function pushLibrary(folders: DriveFolderIds): Promise<void> {
   const library = await buildLibrarySnapshot()
   const content = encoder.encode(JSON.stringify(library))
@@ -219,13 +213,19 @@ async function pullLibrary(folders: DriveFolderIds): Promise<boolean> {
   )
   if (matches.length === 0) return false
   const remoteUpdatedAt = Number(matches[0].appProperties?.pmUpdatedAt ?? 0)
-  if (remoteUpdatedAt <= loadSyncState().libraryUpdatedAt) return false
 
   const revision = driveLibraryRevisions.snapshot(LIBRARY_REVISION_KEY)
   const library = JSON.parse(decoder.decode(await downloadFile(matches[0].id))) as LibraryJson
+  const state = loadSyncState()
   if (
-    !driveLibraryRevisions.isCurrent(LIBRARY_REVISION_KEY, revision) ||
-    remoteUpdatedAt <= loadSyncState().libraryUpdatedAt
+    !shouldApplyRemoteLibrary({
+      remoteUpdatedAt,
+      localUpdatedAt: state.libraryUpdatedAt,
+      remoteHasStructure: libraryHasStructure(library),
+      localHasStructure: await localLibraryHasStructure(),
+      localDirty: state.driveLibraryDirty || state.notionLibraryDirty,
+      revisionIsCurrent: driveLibraryRevisions.isCurrent(LIBRARY_REVISION_KEY, revision)
+    })
   ) {
     return false
   }

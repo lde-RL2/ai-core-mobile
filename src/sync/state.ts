@@ -95,6 +95,11 @@ export function updateSyncState(patch: Partial<SyncState>): SyncState {
   return next
 }
 
+/** Drop all persisted sync bookkeeping (part of the local-data reset). */
+export function resetSyncState(): void {
+  localStorage.removeItem(STORAGE_KEY)
+}
+
 export function usesGoogleDrive(target: SyncTarget = loadSyncState().syncTarget): boolean {
   return target === 'google-drive' || target === 'both'
 }
