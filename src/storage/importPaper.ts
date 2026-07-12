@@ -1,5 +1,6 @@
 import { loadPdf } from '../pdf/pdfjs'
 import { extractPdfMetadata } from '../pdf/metadata'
+import { sha256Hex } from '../sync/format'
 import type { Paper } from '../types'
 import {
   assignPaperToCollection,
@@ -49,6 +50,13 @@ export async function importPdfFile(
     console.warn('[import] PDF parsing failed, falling back to filename:', error)
   }
 
+  let contentHash: string | null = null
+  try {
+    contentHash = await sha256Hex(await file.arrayBuffer())
+  } catch {
+    // Hash is optional metadata; sync verifies only when present.
+  }
+
   const paper: Paper = {
     id: crypto.randomUUID(),
     title: title ?? file.name.replace(/\.pdf$/i, ''),
@@ -60,7 +68,8 @@ export async function importPdfFile(
     notes: null,
     updatedAt: Date.now(),
     fileSize: file.size,
-    pageCount
+    pageCount,
+    contentHash
   }
 
   await savePdfFile(paper.id, file)

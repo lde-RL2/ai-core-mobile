@@ -92,6 +92,11 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
         }
         setDoc(pdf)
         setDims(pageDims)
+        // Papers pulled from sync arrive without a page count; backfill the
+        // local-only field without marking the paper dirty.
+        if (paper.pageCount === null) {
+          void db.putPaperLocal({ ...paper, pageCount: pdf.numPages })
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'PDF를 열 수 없습니다')
@@ -351,7 +356,7 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
 
   const deleteEditingAnnotation = useCallback(async () => {
     if (!editing) return
-    await db.deleteAnnotation(editing.id)
+    await db.deleteAnnotation(editing.id, editing.paperId)
     setAnnotations((prev) => prev.filter((a) => a.id !== editing.id))
     setEditing(null)
   }, [editing])

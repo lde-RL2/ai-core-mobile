@@ -14,8 +14,9 @@
     "icons": "node scripts/generate-icons.mjs",
     "preview": "vite preview --host",
     "test:e2e": "node scripts/e2e-smoke.mjs",
-    "check": "npm run build && npm run test:e2e",
-    "apk": "bash scripts/build-apk.sh"
+    "check": "npm run build && npm test && npm run test:e2e",
+    "apk": "bash scripts/build-apk.sh",
+    "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",
@@ -30,6 +31,7 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "tsx": "^4.23.0",
     "typescript": "^5.9.3",
     "vite": "^7.2.6"
   },

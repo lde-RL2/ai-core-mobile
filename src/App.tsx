@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Collection, Paper, PaperTone, ReadingState, Tag, ThemeMode } from './types'
 import * as db from './storage/db'
 import { AccessGate, isUnlocked } from './components/AccessGate'
+import { initSyncEngine } from './sync/engine'
 import { LibraryScreen } from './components/LibraryScreen'
 import { CollectionsPane } from './components/CollectionsPane'
 import { SettingsScreen } from './components/SettingsScreen'
@@ -39,6 +40,10 @@ export default function App(): React.JSX.Element {
     return () => window.removeEventListener('aicore:update-available', onUpdate)
   }, [])
 
+  useEffect(() => {
+    initSyncEngine()
+  }, [])
+
   const [tab, setTab] = useState<Tab>('library')
   const [papers, setPapers] = useState<Paper[]>([])
   const [collections, setCollections] = useState<Collection[]>([])
@@ -64,6 +69,13 @@ export default function App(): React.JSX.Element {
 
   const [reloadKey, setReloadKey] = useState(0)
   const refresh = useCallback(() => setReloadKey((k) => k + 1), [])
+
+  // Reload data after a sync pull applied remote changes.
+  useEffect(() => {
+    const onSyncChanged = (): void => refresh()
+    window.addEventListener('aicore:sync-changed', onSyncChanged)
+    return () => window.removeEventListener('aicore:sync-changed', onSyncChanged)
+  }, [refresh])
 
   useEffect(() => {
     let cancelled = false

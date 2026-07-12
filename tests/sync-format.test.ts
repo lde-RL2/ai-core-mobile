@@ -1,0 +1,109 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import {
+  annotationToRemoteRow,
+  buildLibraryJson,
+  localUpdatedAt,
+  paperToRemoteRow,
+  remoteCollectionsToLocal,
+  remoteRowToAnnotation,
+  remoteRowToPaper,
+  sha256Hex
+} from '../src/sync/format'
+import type { Annotation, Paper } from '../src/types'
+
+const paper: Paper = {
+  id: 'p1',
+  title: 'Deep Learning',
+  authors: 'Kim, Lee',
+  year: 2024,
+  originalFilename: 'deep.pdf',
+  doi: '10.1/x',
+  addedAt: '2026-01-01T00:00:00.000Z',
+  notes: 'memo',
+  updatedAt: 100,
+  fileSize: 1234,
+  pageCount: 7,
+  contentHash: 'abc'
+}
+
+test('paper round-trips through the desktop wire format', () => {
+  const remote = paperToRemoteRow(paper)
+  assert.equal(remote.original_filename, 'deep.pdf')
+  assert.equal(remote.content_hash, 'abc')
+  const back = remoteRowToPaper(remote, paper)
+  assert.deepEqual(back, paper)
+})
+
+test('pulled paper without local counterpart gets null pageCount', () => {
+  const back = remoteRowToPaper(paperToRemoteRow(paper), undefined)
+  assert.equal(back.pageCount, null)
+  assert.equal(back.title, paper.title)
+})
+
+test('annotation round-trip preserves rects and keeps local text', () => {
+  const annotation: Annotation = {
+    id: 'a1',
+    paperId: 'p1',
+    pageNumber: 3,
+    type: 'highlight',
+    rects: [{ x: 0.1, y: 0.2, w: 0.3, h: 0.05 }],
+    color: '#ffe066',
+    note: 'important',
+    text: 'selected sentence',
+    createdAt: '2026-01-02T00:00:00.000Z',
+    updatedAt: 50
+  }
+  const remote = annotationToRemoteRow(annotation)
+  assert.equal(remote.paper_id, 'p1')
+  assert.ok(!('text' in remote), 'wire format must not carry the mobile-only text field')
+  const back = remoteRowToAnnotation(remote, annotation)
+  assert.deepEqual(back, annotation)
+  const withoutLocal = remoteRowToAnnotation(remote, undefined)
+  assert.equal(withoutLocal?.text, null)
+})
+
+test('localUpdatedAt is the max across paper, annotations, reading state', () => {
+  const annotations = [{ updatedAt: 300 }, { updatedAt: 200 }] as Annotation[]
+  assert.equal(localUpdatedAt(paper, annotations, undefined), 300)
+  assert.equal(
+    localUpdatedAt(paper, [], { paperId: 'p1', lastPage: 2, scrollFraction: 0.5, updatedAt: 999 }),
+    999
+  )
+})
+
+test('remote collections with cycles or missing parents become roots', () => {
+  const local = remoteCollectionsToLocal([
+    { id: 'a', name: 'A', parent_id: 'b' },
+    { id: 'b', name: 'B', parent_id: 'a' },
+    { id: 'c', name: 'C', parent_id: 'missing' },
+    { id: 'd', name: 'D', parent_id: 'a' },
+    { id: 'e', name: 'E', parent_id: 'c' }
+  ])
+  const byId = new Map(local.map((c) => [c.id, c]))
+  assert.equal(byId.get('a')?.parentId, null)
+  assert.equal(byId.get('b')?.parentId, null)
+  assert.equal(byId.get('c')?.parentId, null)
+  // Desktop policy: any ancestor chain that hits a cycle drops the link too.
+  assert.equal(byId.get('d')?.parentId, null)
+  // A chain ending at a (repaired) root stays attached.
+  assert.equal(byId.get('e')?.parentId, 'c')
+})
+
+test('library json uses desktop snake_case keys', () => {
+  const library = buildLibraryJson(
+    42,
+    [{ id: 'c1', name: 'ML', parentId: null }],
+    [{ paperId: 'p1', collectionId: 'c1' }],
+    [{ id: 't1', name: 'rl' }],
+    [{ paperId: 'p1', tagId: 't1' }]
+  )
+  assert.deepEqual(library.collections[0], { id: 'c1', name: 'ML', parent_id: null })
+  assert.deepEqual(library.paper_collections[0], { paper_id: 'p1', collection_id: 'c1' })
+  assert.deepEqual(library.paper_tags?.[0], { paper_id: 'p1', tag_id: 't1' })
+})
+
+test('sha256Hex matches a known digest', async () => {
+  const digest = await sha256Hex(new TextEncoder().encode('abc'))
+  assert.equal(digest, 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
+})

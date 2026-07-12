@@ -10,6 +10,7 @@ export interface Paper {
   updatedAt: number
   fileSize: number
   pageCount: number | null
+  contentHash?: string | null
 }
 
 export interface Collection {

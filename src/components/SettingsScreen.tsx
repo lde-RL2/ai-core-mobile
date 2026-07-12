@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { PaperTone, ThemeMode } from '../types'
 import { estimateStorage, requestPersistentStorage } from '../storage/db'
 import { downloadBackup, exportBackup, importBackup } from '../storage/backup'
+import { markAllLocalDirty } from '../sync/engine'
+import { SyncSettings } from './SyncSettings'
 
 interface SettingsScreenProps {
   theme: ThemeMode
@@ -74,6 +76,7 @@ export function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
       setBackupMessage(
         `논문 ${summary.papersAdded}개 추가, ${summary.papersSkipped}개 건너뜀 (이미 있음).`
       )
+      await markAllLocalDirty()
       props.refresh()
       void estimateStorage().then(setStorage)
     } catch (error) {
@@ -151,6 +154,8 @@ export function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
             영구 저장이 허용되면 브라우저가 저장 공간 부족 시에도 라이브러리를 지우지 않습니다.
           </p>
         </section>
+
+        <SyncSettings />
 
         <section className="settings-section">
           <h2>백업</h2>
