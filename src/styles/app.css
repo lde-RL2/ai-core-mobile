@@ -620,6 +620,85 @@
   height: 18px;
 }
 
+/* ---------- access gate / update toast / fatal error ---------- */
+
+.access-gate {
+  height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.access-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: min(340px, 100%);
+  padding: 28px 24px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-elevated);
+  box-shadow: var(--shadow-card);
+  text-align: center;
+}
+
+.access-card img {
+  border-radius: var(--radius-md);
+}
+
+.access-card h1 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.access-card .primary-button {
+  width: 100%;
+  flex: none;
+}
+
+.gate-error {
+  color: var(--color-danger);
+}
+
+.update-toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(70px + var(--safe-bottom));
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-elevated);
+  box-shadow: var(--shadow-float);
+  font-size: 14px;
+}
+
+.fatal-error {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px;
+  text-align: center;
+}
+
+.fatal-error h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.fatal-error .primary-button {
+  flex: none;
+  padding: 10px 24px;
+}
+
 /* ---------- reader ---------- */
 
 .reader {

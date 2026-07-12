@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AI-Core</string>
+    <string name="title_activity_main">AI-Core</string>
+    <string name="package_name">com.aicore.mobile</string>
+    <string name="custom_url_scheme">com.aicore.mobile</string>
+</resources>

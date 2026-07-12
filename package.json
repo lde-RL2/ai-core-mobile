@@ -14,15 +14,19 @@
     "icons": "node scripts/generate-icons.mjs",
     "preview": "vite preview --host",
     "test:e2e": "node scripts/e2e-smoke.mjs",
-    "check": "npm run build && npm run test:e2e"
+    "check": "npm run build && npm run test:e2e",
+    "apk": "bash scripts/build-apk.sh"
   },
   "dependencies": {
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/core": "^8.4.1",
     "fflate": "^0.8.3",
     "pdfjs-dist": "^4.10.38",
     "react": "^19.2.1",
     "react-dom": "^19.2.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.4.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",

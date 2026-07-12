@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Collection, Paper, PaperTone, ReadingState, Tag, ThemeMode } from './types'
 import * as db from './storage/db'
+import { AccessGate, isUnlocked } from './components/AccessGate'
 import { LibraryScreen } from './components/LibraryScreen'
 import { CollectionsPane } from './components/CollectionsPane'
 import { SettingsScreen } from './components/SettingsScreen'
@@ -29,6 +30,14 @@ function readStored<T extends string>(key: string, fallback: T, allowed: readonl
 
 export default function App(): React.JSX.Element {
   const isTablet = useMediaQuery('(min-width: 768px)')
+  const [unlocked, setUnlocked] = useState(isUnlocked)
+  const [updateReady, setUpdateReady] = useState(false)
+
+  useEffect(() => {
+    const onUpdate = (): void => setUpdateReady(true)
+    window.addEventListener('aicore:update-available', onUpdate)
+    return () => window.removeEventListener('aicore:update-available', onUpdate)
+  }, [])
 
   const [tab, setTab] = useState<Tab>('library')
   const [papers, setPapers] = useState<Paper[]>([])
@@ -208,6 +217,10 @@ export default function App(): React.JSX.Element {
   const openPaper = openPaperId ? papers.find((p) => p.id === openPaperId) : undefined
   const detailPaper = detailPaperId ? papers.find((p) => p.id === detailPaperId) : undefined
 
+  if (!unlocked) {
+    return <AccessGate onUnlock={() => setUnlocked(true)} />
+  }
+
   const library = (
     <LibraryScreen
       papers={filteredPapers}
@@ -297,6 +310,22 @@ export default function App(): React.JSX.Element {
       )}
 
       {openPaper && <ReaderScreen paper={openPaper} onClose={closeOverlay} refresh={refresh} />}
+
+      {updateReady && (
+        <div className="update-toast">
+          <span>새 버전이 준비되었습니다.</span>
+          <button className="chip-button" onClick={() => window.location.reload()}>
+            새로고침
+          </button>
+          <button
+            className="icon-button small"
+            aria-label="닫기"
+            onClick={() => setUpdateReady(false)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   )
 }
