@@ -1,0 +1,35 @@
+{
+  "name": "ai-core-mobile",
+  "version": "0.1.0",
+  "description": "AI-Core mobile/tablet PWA: local-first PDF paper library with annotations",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "vite --host",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && vite build && node scripts/inject-sw-precache.mjs",
+    "icons": "node scripts/generate-icons.mjs",
+    "preview": "vite preview --host",
+    "test:e2e": "node scripts/e2e-smoke.mjs",
+    "check": "npm run build && npm run test:e2e"
+  },
+  "dependencies": {
+    "fflate": "^0.8.3",
+    "pdfjs-dist": "^4.10.38",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.6"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true
+  }
+}

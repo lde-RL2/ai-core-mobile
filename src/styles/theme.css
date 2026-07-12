@@ -1,0 +1,121 @@
+/* Shared palette with the desktop app (paper-manager-work theme.css). */
+:root {
+  --font-sans:
+    Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell,
+    'Helvetica Neue', sans-serif;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  /* Light theme (default) */
+  --color-bg: #f5f4f0;
+  --color-bg-elevated: #fffefa;
+  --color-bg-sidebar: #f0efeb;
+  --color-bg-hover: #e9e8e3;
+  --color-bg-selected: #e5e9f7;
+  --color-bg-soft: #faf9f6;
+
+  --color-border: #dfded8;
+  --color-border-strong: #cfcec7;
+
+  --color-text: #20211f;
+  --color-text-muted: #666862;
+  --color-text-faint: #979991;
+
+  --color-accent: #4f6fe7;
+  --color-accent-text: #ffffff;
+  --color-warm: #e4a11b;
+  --color-success: #39a875;
+  --color-danger: #d0524d;
+
+  --shadow-card: 0 1px 2px rgb(34 35 31 / 5%), 0 8px 24px rgb(34 35 31 / 4%);
+  --shadow-float: 0 16px 48px rgb(34 35 31 / 18%);
+
+  --pdf-paper-bg: #ffffff;
+  --pdf-canvas-filter: none;
+}
+
+:root[data-theme='dark'] {
+  --color-bg: #181a1d;
+  --color-bg-elevated: #212328;
+  --color-bg-sidebar: #141619;
+  --color-bg-hover: #2b2e34;
+  --color-bg-selected: #30394f;
+  --color-bg-soft: #1c1e22;
+
+  --color-border: #34373d;
+  --color-border-strong: #484c54;
+
+  --color-text: rgba(248, 249, 252, 0.94);
+  --color-text-muted: rgba(230, 233, 241, 0.66);
+  --color-text-faint: rgba(220, 224, 234, 0.42);
+
+  --color-accent: #8da5ff;
+  --color-accent-text: #11131a;
+  --color-warm: #efb64f;
+  --color-success: #6bd09e;
+  --color-danger: #f07470;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 22%), 0 8px 24px rgb(0 0 0 / 16%);
+  --shadow-float: 0 16px 48px rgb(0 0 0 / 48%);
+}
+
+:root[data-paper-tone='warm'] {
+  --pdf-paper-bg: #f5eddc;
+  --pdf-canvas-filter: sepia(0.12) brightness(0.97) saturate(0.9);
+}
+
+:root[data-paper-tone='sepia'] {
+  --pdf-paper-bg: #ead8b8;
+  --pdf-canvas-filter: sepia(0.34) brightness(0.91) saturate(0.82) contrast(0.96);
+}
+
+:root[data-paper-tone='dark'] {
+  --pdf-paper-bg: #181a1d;
+  --pdf-canvas-filter: invert(0.9) hue-rotate(180deg) brightness(0.82) contrast(0.92);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--color-text);
+  background: var(--color-bg);
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+
+input,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
