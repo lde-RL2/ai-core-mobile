@@ -34,6 +34,24 @@ export interface SyncState {
 
 const STORAGE_KEY = 'aicore.sync'
 
+// Deploy-time defaults, the mobile counterpart of the desktop app's bundled
+// OAuth credentials (buildConfig.ts): the app owner bakes these into the
+// build once (GitHub repo variables → workflow env), and friends only press
+// "로그인" / enter their own Notion token — same UX as the desktop app.
+// Neither value is a secret: both ship inside the public JS bundle anyway.
+const BUNDLED_GOOGLE_CLIENT_ID =
+  (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)?.trim() || null
+const BUNDLED_NOTION_PROXY_URL =
+  (import.meta.env.VITE_NOTION_PROXY_URL as string | undefined)?.trim() || null
+
+export function hasBundledGoogleClientId(): boolean {
+  return BUNDLED_GOOGLE_CLIENT_ID !== null
+}
+
+export function hasBundledNotionProxy(): boolean {
+  return BUNDLED_NOTION_PROXY_URL !== null
+}
+
 const DEFAULT_STATE: SyncState = {
   syncTarget: 'none',
   libraryUpdatedAt: 0,
@@ -53,13 +71,18 @@ const DEFAULT_STATE: SyncState = {
 }
 
 export function loadSyncState(): SyncState {
+  let state: SyncState
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { ...DEFAULT_STATE }
-    return { ...DEFAULT_STATE, ...(JSON.parse(raw) as Partial<SyncState>) }
+    state = raw
+      ? { ...DEFAULT_STATE, ...(JSON.parse(raw) as Partial<SyncState>) }
+      : { ...DEFAULT_STATE }
   } catch {
-    return { ...DEFAULT_STATE }
+    state = { ...DEFAULT_STATE }
   }
+  if (!state.googleClientId) state.googleClientId = BUNDLED_GOOGLE_CLIENT_ID
+  if (!state.notionProxyUrl) state.notionProxyUrl = BUNDLED_NOTION_PROXY_URL
+  return state
 }
 
 export function saveSyncState(state: SyncState): void {

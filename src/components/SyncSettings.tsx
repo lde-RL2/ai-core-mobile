@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
+  hasBundledGoogleClientId,
+  hasBundledNotionProxy,
   loadSyncState,
   updateSyncState,
   usesGoogleDrive,
@@ -130,20 +132,24 @@ export function SyncSettings(): React.JSX.Element {
             </p>
           ) : (
             <>
-              <label className="field-label" htmlFor="drive-client-id">
-                웹용 OAuth 클라이언트 ID (데스크톱 앱과 같은 Google Cloud 프로젝트)
-              </label>
-              <input
-                id="drive-client-id"
-                className="field-input"
-                placeholder="xxxx.apps.googleusercontent.com"
-                value={clientIdInput}
-                onChange={(e) => setClientIdInput(e.target.value)}
-                onBlur={() => {
-                  updateSyncState({ googleClientId: clientIdInput.trim() || null })
-                  rerender()
-                }}
-              />
+              {!hasBundledGoogleClientId() && (
+                <>
+                  <label className="field-label" htmlFor="drive-client-id">
+                    웹용 OAuth 클라이언트 ID (데스크톱 앱과 같은 Google Cloud 프로젝트)
+                  </label>
+                  <input
+                    id="drive-client-id"
+                    className="field-input"
+                    placeholder="xxxx.apps.googleusercontent.com"
+                    value={clientIdInput}
+                    onChange={(e) => setClientIdInput(e.target.value)}
+                    onBlur={() => {
+                      updateSyncState({ googleClientId: clientIdInput.trim() || null })
+                      rerender()
+                    }}
+                  />
+                </>
+              )}
               <div className="settings-button-row">
                 {getDriveAuthStatus() === 'signed_in' ? (
                   <>
@@ -191,16 +197,20 @@ export function SyncSettings(): React.JSX.Element {
       {usesNotion(state.syncTarget) && (
         <div className="sync-provider">
           <h3>Notion</h3>
-          <label className="field-label" htmlFor="notion-proxy">
-            프록시 URL (workers/notion-proxy.js 배포 주소)
-          </label>
-          <input
-            id="notion-proxy"
-            className="field-input"
-            placeholder="https://aicore-notion-proxy.<계정>.workers.dev"
-            value={proxyInput}
-            onChange={(e) => setProxyInput(e.target.value)}
-          />
+          {!hasBundledNotionProxy() && (
+            <>
+              <label className="field-label" htmlFor="notion-proxy">
+                프록시 URL (workers/notion-proxy.js 배포 주소)
+              </label>
+              <input
+                id="notion-proxy"
+                className="field-input"
+                placeholder="https://aicore-notion-proxy.<계정>.workers.dev"
+                value={proxyInput}
+                onChange={(e) => setProxyInput(e.target.value)}
+              />
+            </>
+          )}
           <label className="field-label" htmlFor="notion-token">
             통합 토큰 {state.notionAccessToken ? '(저장됨 — 바꿀 때만 입력)' : ''}
           </label>
@@ -229,7 +239,9 @@ export function SyncSettings(): React.JSX.Element {
               onClick={() =>
                 void run('Notion 연결', async () => {
                   updateSyncState({
-                    notionProxyUrl: proxyInput.trim() || null,
+                    ...(hasBundledNotionProxy()
+                      ? {}
+                      : { notionProxyUrl: proxyInput.trim() || null }),
                     ...(tokenInput.trim() ? { notionAccessToken: tokenInput.trim() } : {}),
                     notionParentPageId: parentPageInput.trim() || null
                   })

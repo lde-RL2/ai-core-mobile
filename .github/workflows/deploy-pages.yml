@@ -36,6 +36,12 @@ jobs:
           # Optional friends-only passcode: set the ACCESS_CODE secret in
           # Settings → Secrets and variables → Actions. Leave unset to disable.
           VITE_ACCESS_CODE: ${{ secrets.ACCESS_CODE }}
+          # Bundled sync defaults (Settings → Secrets and variables → Actions
+          # → Variables tab). With these set, friends get the desktop-like
+          # UX: Drive needs only the login button, Notion only token+page.
+          # Both values are public in the JS bundle by nature — not secrets.
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          VITE_NOTION_PROXY_URL: ${{ vars.NOTION_PROXY_URL }}
         run: npx vite build && node scripts/inject-sw-precache.mjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
