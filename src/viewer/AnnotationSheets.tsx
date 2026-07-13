@@ -59,10 +59,20 @@ interface AnnotationEditSheetProps {
   onClose: () => void
 }
 
+const TYPE_LABELS: Record<AnnotationType, string> = {
+  highlight: '형광펜',
+  underline: '밑줄',
+  area: '영역 표시',
+  note: '스티키 메모'
+}
+
 export function AnnotationEditSheet(props: AnnotationEditSheetProps): React.JSX.Element {
   const [type, setType] = useState<AnnotationType>(props.annotation.type)
   const [color, setColor] = useState(props.annotation.color)
   const [note, setNote] = useState(props.annotation.note ?? '')
+  // Area/sticky-note rects are not text selections, so they cannot be
+  // converted into highlight/underline (or back).
+  const spatial = props.annotation.type === 'area' || props.annotation.type === 'note'
 
   function save(): void {
     props.onSave({ type, color, note: note.trim() || null })
@@ -87,20 +97,27 @@ export function AnnotationEditSheet(props: AnnotationEditSheetProps): React.JSX.
               />
             ))}
           </div>
-          <div className="segmented">
-            <button
-              className={type === 'highlight' ? 'segment active' : 'segment'}
-              onClick={() => setType('highlight')}
-            >
-              형광펜
-            </button>
-            <button
-              className={type === 'underline' ? 'segment active' : 'segment'}
-              onClick={() => setType('underline')}
-            >
-              밑줄
-            </button>
-          </div>
+          {spatial ? (
+            <p className="empty-hint">
+              {TYPE_LABELS[props.annotation.type]} — 데스크톱 앱에서 만든 주석입니다. 색과 메모를
+              수정할 수 있습니다.
+            </p>
+          ) : (
+            <div className="segmented">
+              <button
+                className={type === 'highlight' ? 'segment active' : 'segment'}
+                onClick={() => setType('highlight')}
+              >
+                형광펜
+              </button>
+              <button
+                className={type === 'underline' ? 'segment active' : 'segment'}
+                onClick={() => setType('underline')}
+              >
+                밑줄
+              </button>
+            </div>
+          )}
           <textarea
             className="field-input"
             rows={3}
@@ -152,7 +169,7 @@ export function AnnotationListSheet(props: AnnotationListSheetProps): React.JSX.
                 />
                 <span className="annotation-list-text">
                   <span className="annotation-list-quote">
-                    {annotation.text || (annotation.type === 'highlight' ? '하이라이트' : '밑줄')}
+                    {annotation.text || TYPE_LABELS[annotation.type]}
                   </span>
                   {annotation.note && (
                     <span className="annotation-list-note">{annotation.note}</span>

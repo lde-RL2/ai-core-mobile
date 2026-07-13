@@ -111,19 +111,21 @@ function PdfPageImpl(props: PdfPageProps): React.JSX.Element {
             annotation.rects.map((rect, index) => (
               <div
                 key={`${annotation.id}-${index}`}
-                className={
-                  annotation.type === 'highlight'
-                    ? 'pm-annotation highlight'
-                    : 'pm-annotation underline'
-                }
+                className={`pm-annotation ${annotation.type}`}
                 style={{
                   left: `${rect.x * 100}%`,
                   top: `${rect.y * 100}%`,
                   width: `${rect.w * 100}%`,
                   height: `${rect.h * 100}%`,
-                  ...(annotation.type === 'highlight'
+                  ...(annotation.type === 'highlight' || annotation.type === 'note'
                     ? { backgroundColor: annotation.color }
-                    : { borderBottomColor: annotation.color })
+                    : annotation.type === 'underline'
+                      ? { borderBottomColor: annotation.color }
+                      : {
+                          // area: outlined box with a faint fill (desktop parity)
+                          borderColor: annotation.color,
+                          backgroundColor: `${annotation.color}14`
+                        })
                 }}
                 onClick={(e) => {
                   e.stopPropagation()

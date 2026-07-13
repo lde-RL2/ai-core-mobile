@@ -27,9 +27,13 @@ export interface RemoteAnnotationRow {
   rects_json: string
   color: string
   note: string | null
+  /** Added in desktop schema v2; metas written by older versions lack it. */
+  selected_text?: string | null
   created_at: string
   updated_at: number
 }
+
+const ANNOTATION_TYPES = ['highlight', 'underline', 'area', 'note'] as const
 
 export interface RemoteReadingState {
   last_page: number
@@ -76,8 +80,6 @@ export function paperToRemoteRow(paper: Paper): RemotePaperRow {
 }
 
 export function annotationToRemoteRow(annotation: Annotation): RemoteAnnotationRow {
-  // The mobile-only `text` field is intentionally dropped: the desktop schema
-  // has no such column and its meta apply would reject unknown fields.
   return {
     id: annotation.id,
     paper_id: annotation.paperId,
@@ -86,6 +88,9 @@ export function annotationToRemoteRow(annotation: Annotation): RemoteAnnotationR
     rects_json: JSON.stringify(annotation.rects),
     color: annotation.color,
     note: annotation.note,
+    // Desktop schema v2 stores the selection text in selected_text; the
+    // mobile-local `text` field maps onto it 1:1.
+    selected_text: annotation.text,
     created_at: annotation.createdAt,
     updated_at: annotation.updatedAt
   }
@@ -168,12 +173,17 @@ export function remoteRowToAnnotation(
     id: row.id,
     paperId: row.paper_id,
     pageNumber: row.page_number,
-    type: row.type === 'underline' ? 'underline' : 'highlight',
+    // Preserve every desktop v2 type. An unknown future type degrades to
+    // highlight as a last resort — matching the desktop's own fallback.
+    type: (ANNOTATION_TYPES as readonly string[]).includes(row.type)
+      ? (row.type as Annotation['type'])
+      : 'highlight',
     rects,
     color: row.color,
     note: row.note,
-    // The wire format has no selected-text field; keep what we knew locally.
-    text: existing?.text ?? null,
+    // v2 metas carry the selection text; older metas fall back to what we
+    // knew locally.
+    text: row.selected_text ?? existing?.text ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   }

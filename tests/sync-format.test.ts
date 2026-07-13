@@ -41,7 +41,7 @@ test('pulled paper without local counterpart gets null pageCount', () => {
   assert.equal(back.title, paper.title)
 })
 
-test('annotation round-trip preserves rects and keeps local text', () => {
+test('annotation round-trip carries text as desktop-v2 selected_text', () => {
   const annotation: Annotation = {
     id: 'a1',
     paperId: 'p1',
@@ -56,11 +56,66 @@ test('annotation round-trip preserves rects and keeps local text', () => {
   }
   const remote = annotationToRemoteRow(annotation)
   assert.equal(remote.paper_id, 'p1')
-  assert.ok(!('text' in remote), 'wire format must not carry the mobile-only text field')
-  const back = remoteRowToAnnotation(remote, annotation)
+  assert.equal(remote.selected_text, 'selected sentence')
+  assert.ok(!('text' in remote), 'the mobile-local field name must not leak into the wire')
+  const back = remoteRowToAnnotation(remote, undefined)
   assert.deepEqual(back, annotation)
-  const withoutLocal = remoteRowToAnnotation(remote, undefined)
-  assert.equal(withoutLocal?.text, null)
+})
+
+test('older metas without selected_text keep the locally known text', () => {
+  const annotation: Annotation = {
+    id: 'a1',
+    paperId: 'p1',
+    pageNumber: 3,
+    type: 'underline',
+    rects: [{ x: 0.1, y: 0.2, w: 0.3, h: 0.05 }],
+    color: '#ffe066',
+    note: null,
+    text: 'known locally',
+    createdAt: '2026-01-02T00:00:00.000Z',
+    updatedAt: 50
+  }
+  const legacyRemote = { ...annotationToRemoteRow(annotation) }
+  delete legacyRemote.selected_text
+  assert.equal(remoteRowToAnnotation(legacyRemote, annotation)?.text, 'known locally')
+  assert.equal(remoteRowToAnnotation(legacyRemote, undefined)?.text, null)
+})
+
+test('desktop area and sticky-note annotations survive the round trip', () => {
+  for (const type of ['area', 'note'] as const) {
+    const annotation: Annotation = {
+      id: `a-${type}`,
+      paperId: 'p1',
+      pageNumber: 2,
+      type,
+      rects: [{ x: 0.2, y: 0.3, w: 0.25, h: 0.15 }],
+      color: '#9ad1f5',
+      note: 'figure 3',
+      text: null,
+      createdAt: '2026-01-02T00:00:00.000Z',
+      updatedAt: 70
+    }
+    const remote = annotationToRemoteRow(annotation)
+    assert.equal(remote.type, type)
+    const back = remoteRowToAnnotation(remote, undefined)
+    assert.equal(back?.type, type, `type ${type} must not be coerced`)
+    assert.deepEqual(back, annotation)
+  }
+})
+
+test('an unknown future annotation type degrades to highlight', () => {
+  const remote = {
+    id: 'a9',
+    paper_id: 'p1',
+    page_number: 1,
+    type: 'ink',
+    rects_json: '[{"x":0,"y":0,"w":0.1,"h":0.1}]',
+    color: '#fff',
+    note: null,
+    created_at: '2026-01-02T00:00:00.000Z',
+    updated_at: 1
+  }
+  assert.equal(remoteRowToAnnotation(remote, undefined)?.type, 'highlight')
 })
 
 test('localUpdatedAt is the max across paper, annotations, reading state', () => {

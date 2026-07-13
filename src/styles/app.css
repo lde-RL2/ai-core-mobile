@@ -839,6 +839,19 @@
   border-bottom: 2.5px solid;
 }
 
+.pm-annotation.area {
+  border: 2px solid;
+  border-radius: 3px;
+}
+
+.pm-annotation.note {
+  min-width: 14px;
+  min-height: 14px;
+  border-radius: 3px;
+  opacity: 0.9;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 30%);
+}
+
 /* ---------- reader search ---------- */
 
 .reader-search {

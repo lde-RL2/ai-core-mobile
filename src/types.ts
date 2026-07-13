@@ -24,7 +24,9 @@ export interface Tag {
   name: string
 }
 
-export type AnnotationType = 'highlight' | 'underline'
+// Keep in sync with the desktop schema (annotations.type CHECK constraint).
+// 'area' and 'note' are created on desktop; mobile renders and edits them.
+export type AnnotationType = 'highlight' | 'underline' | 'area' | 'note'
 
 export interface NormalizedRect {
   x: number
