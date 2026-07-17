@@ -12,6 +12,9 @@ const PAGE_GAP = 14
 const SIDE_PADDING = 8
 const MIN_ZOOM = 0.5
 const MAX_ZOOM = 4
+// Double-tap toggles between fit-width (1) and this readable zoom, which fills
+// a phone with roughly one column of a two-column paper.
+const READABLE_ZOOM = 2.2
 const EMPTY_ANNOTATIONS: Annotation[] = []
 
 interface ReaderScreenProps {
@@ -134,17 +137,21 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
 
   const layout = useMemo(() => {
     if (!dims) return null
+    // The gap must scale with zoom too, otherwise the layout is not a uniform
+    // scaling of itself between zoom levels and the zoom-anchor math below
+    // drifts — landing on a different page the further you are down the doc.
+    const gap = PAGE_GAP * zoom
     const tops: number[] = []
     const heights: number[] = []
-    let cursor = PAGE_GAP
+    let cursor = gap
     for (const dim of dims) {
       const height = (cssPageWidth * dim.h) / dim.w
       tops.push(cursor)
       heights.push(height)
-      cursor += height + PAGE_GAP
+      cursor += height + gap
     }
     return { tops, heights, totalHeight: cursor }
-  }, [dims, cssPageWidth])
+  }, [dims, cssPageWidth, zoom])
 
   const layoutRef = useRef(layout)
   layoutRef.current = layout
@@ -205,8 +212,19 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
       ratio: number
     } | null = null
 
+    // Single-finger tap tracking, used only to detect a double-tap.
+    let tapStart: { x: number; y: number; t: number } | null = null
+    let lastTapTime = 0
+    let lastTapX = 0
+    let lastTapY = 0
+
     const onTouchStart = (e: TouchEvent): void => {
+      if (e.touches.length === 1) {
+        const t = e.touches[0]
+        tapStart = { x: t.clientX, y: t.clientY, t: Date.now() }
+      }
       if (e.touches.length !== 2) return
+      tapStart = null
       const [a, b] = [e.touches[0], e.touches[1]]
       const rect = scrollEl.getBoundingClientRect()
       pinch = {
@@ -217,6 +235,37 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
         startScrollLeft: scrollEl.scrollLeft,
         startScrollTop: scrollEl.scrollTop,
         ratio: 1
+      }
+    }
+
+    const handleDoubleTap = (e: TouchEvent): void => {
+      const start = tapStart
+      tapStart = null
+      if (!start || e.touches.length > 0) return
+      const t = e.changedTouches[0]
+      if (!t) return
+      // A clean tap: little movement, short duration (not a scroll or long
+      // press for text selection).
+      if (Math.hypot(t.clientX - start.x, t.clientY - start.y) > 12) return
+      if (Date.now() - start.t > 250) return
+      const now = Date.now()
+      const near = Math.hypot(t.clientX - lastTapX, t.clientY - lastTapY) < 40
+      if (now - lastTapTime < 300 && near) {
+        lastTapTime = 0
+        const rect = scrollEl.getBoundingClientRect()
+        const px = t.clientX - rect.left
+        const py = t.clientY - rect.top
+        const target = zoomRef.current < READABLE_ZOOM - 0.05 ? READABLE_ZOOM : 1
+        const ratio = target / zoomRef.current
+        pendingScrollRef.current = {
+          left: (scrollEl.scrollLeft + px) * ratio - px,
+          top: (scrollEl.scrollTop + py) * ratio - py
+        }
+        setZoom(target)
+      } else {
+        lastTapTime = now
+        lastTapX = t.clientX
+        lastTapY = t.clientY
       }
     }
 
@@ -240,7 +289,11 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
     }
 
     const onTouchEnd = (e: TouchEvent): void => {
-      if (!pinch || e.touches.length >= 2) return
+      if (!pinch) {
+        handleDoubleTap(e)
+        return
+      }
+      if (e.touches.length >= 2) return
       const finished = pinch
       pinch = null
       const content = contentRef.current
