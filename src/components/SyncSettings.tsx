@@ -23,6 +23,7 @@ import {
   testNotionConnection
 } from '../sync/notionSync'
 import { firstSyncAfterConnect, getLastSyncAt, syncNow } from '../sync/engine'
+import { normalizeNotionPageId } from '../sync/notionIds'
 
 const TARGET_OPTIONS: { value: SyncTarget; label: string }[] = [
   { value: 'none', label: '사용 안 함' },
@@ -247,12 +248,12 @@ export function SyncSettings(): React.JSX.Element {
             onChange={(e) => setTokenInput(e.target.value)}
           />
           <label className="field-label" htmlFor="notion-parent">
-            부모 페이지 ID
+            부모 페이지 (URL 또는 32자리 ID)
           </label>
           <input
             id="notion-parent"
             className="field-input"
-            placeholder="32자리 페이지 ID"
+            placeholder="https://notion.so/… 또는 32자리 페이지 ID"
             value={parentPageInput}
             onChange={(e) => setParentPageInput(e.target.value)}
           />
@@ -264,7 +265,11 @@ export function SyncSettings(): React.JSX.Element {
                 void run('Notion 연결', async () => {
                   const previous = loadSyncState()
                   const nextToken = tokenInput.trim() || previous.notionAccessToken
-                  const nextParent = parentPageInput.trim() || null
+                  // Accept a pasted page URL or a bare ID, mirroring the desktop
+                  // app; throws a clear message if it is neither.
+                  const nextParent = parentPageInput.trim()
+                    ? normalizeNotionPageId(parentPageInput)
+                    : null
                   // A different token or parent page targets a different
                   // workspace — drop every cached database/page id so we
                   // never keep writing into the old database.
