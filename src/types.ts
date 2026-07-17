@@ -11,6 +11,11 @@ export interface Paper {
   fileSize: number
   pageCount: number | null
   contentHash?: string | null
+  /** Opaque passthrough for desktop-only paper columns the mobile app does not
+   *  model (creators_json, abstract_note, publisher, arxiv_id, file_path, …).
+   *  Captured on pull and echoed back on push so a mobile round-trip never
+   *  strips the richer metadata a user entered on the desktop app. */
+  remoteExtras?: Record<string, unknown>
 }
 
 export interface Collection {

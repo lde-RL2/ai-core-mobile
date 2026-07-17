@@ -41,6 +41,47 @@ test('pulled paper without local counterpart gets null pageCount', () => {
   assert.equal(back.title, paper.title)
 })
 
+test('desktop-only metadata columns survive a mobile pull → push round trip', () => {
+  // A meta written by the desktop v1.2.0 metadata-v2 schema: the mobile app
+  // models none of these columns but must not drop them.
+  const desktopRow = {
+    ...paperToRemoteRow(paper),
+    item_type: 'journalArticle',
+    creators_json: '[{"lastName":"Kim"}]',
+    abstract_note: 'We present…',
+    publication_title: 'Nature',
+    publisher: 'Springer',
+    url: 'https://doi.org/10.1/x',
+    arxiv_id: '2401.00001',
+    file_path: '/home/user/papers/deep.pdf'
+  }
+  // Pull, then the user renames the paper on the phone, then push.
+  const pulled = remoteRowToPaper(desktopRow, undefined)
+  const edited = { ...pulled, title: 'Deep Learning (edited on phone)' }
+  const pushed = paperToRemoteRow(edited) as unknown as Record<string, unknown>
+
+  assert.equal(pushed.title, 'Deep Learning (edited on phone)', 'phone edit wins')
+  for (const key of [
+    'item_type',
+    'creators_json',
+    'abstract_note',
+    'publication_title',
+    'publisher',
+    'url',
+    'arxiv_id',
+    'file_path'
+  ]) {
+    assert.equal(pushed[key], desktopRow[key as keyof typeof desktopRow], `${key} preserved`)
+  }
+})
+
+test('a pre-metadata-v2 meta does not wipe extras already known locally', () => {
+  const withExtras = { ...paper, remoteExtras: { abstract_note: 'kept' } }
+  const legacyRow = paperToRemoteRow(paper) // 11 known keys only, no extras
+  const back = remoteRowToPaper(legacyRow, withExtras)
+  assert.deepEqual(back.remoteExtras, { abstract_note: 'kept' })
+})
+
 test('annotation round-trip carries text as desktop-v2 selected_text', () => {
   const annotation: Annotation = {
     id: 'a1',

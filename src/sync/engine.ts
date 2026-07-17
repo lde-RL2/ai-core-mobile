@@ -1,7 +1,7 @@
 // Glue between local mutations and the two sync providers: marks dirty state
 // via db hooks, debounces pushes, and runs pulls on startup / on demand.
 import * as db from '../storage/db'
-import { loadSyncState, updateSyncState, usesGoogleDrive, usesNotion } from './state'
+import { isReadOnlySync, loadSyncState, updateSyncState, usesGoogleDrive, usesNotion } from './state'
 import { getProviderSyncStatus } from './status'
 import {
   driveSyncEnabled,
@@ -34,6 +34,9 @@ function scheduleFlush(): void {
 }
 
 async function flushAll(): Promise<void> {
+  // Download-only devices never push. This is the single choke point that keeps
+  // local edits (including deletions re-queued during a pull) off the remote.
+  if (isReadOnlySync()) return
   if (driveSyncEnabled()) await flushDriveDirty()
   if (notionSyncEnabled()) await flushNotionDirty()
 }
@@ -59,16 +62,19 @@ function recordSyncCompletion(): void {
 export function initSyncEngine(): void {
   db.setSyncHooks({
     paperChanged: (paperId) => {
+      if (isReadOnlySync()) return
       if (usesGoogleDrive()) markDriveDirty(paperId)
       if (usesNotion()) markNotionDirty(paperId)
       scheduleFlush()
     },
     paperDeleted: (paperId) => {
+      if (isReadOnlySync()) return
       if (usesGoogleDrive()) markDriveDirty(paperId)
       if (usesNotion()) markNotionDirty(paperId)
       scheduleFlush()
     },
     libraryChanged: () => {
+      if (isReadOnlySync()) return
       if (usesGoogleDrive()) markDriveLibraryDirty()
       if (usesNotion()) markNotionLibraryDirty()
       scheduleFlush()
@@ -95,6 +101,7 @@ export async function syncNow(): Promise<void> {
  *  but the library timestamp is only stamped when local structure actually
  *  exists — a fresh empty device must never outrank the remote folder tree. */
 export async function markAllLocalDirty(): Promise<void> {
+  if (isReadOnlySync()) return
   const papers = await db.listPapers()
   for (const paper of papers) {
     if (usesGoogleDrive()) markDriveDirty(paper.id)

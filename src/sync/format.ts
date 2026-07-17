@@ -35,6 +35,23 @@ export interface RemoteAnnotationRow {
 
 const ANNOTATION_TYPES = ['highlight', 'underline', 'area', 'note'] as const
 
+// Every paper-row key the mobile app models itself. Anything else in a remote
+// row (creators_json, abstract_note, publisher, arxiv_id, file_path, …) is a
+// desktop-only column we carry through untouched instead of dropping.
+const KNOWN_PAPER_KEYS: ReadonlySet<string> = new Set([
+  'id',
+  'title',
+  'authors',
+  'year',
+  'original_filename',
+  'doi',
+  'added_at',
+  'notes',
+  'updated_at',
+  'content_hash',
+  'file_size'
+])
+
 export interface RemoteReadingState {
   last_page: number
   scroll_fraction: number
@@ -64,7 +81,7 @@ export interface LibraryJson {
 // ---------- local → remote ----------
 
 export function paperToRemoteRow(paper: Paper): RemotePaperRow {
-  return {
+  const known: RemotePaperRow = {
     id: paper.id,
     title: paper.title,
     authors: paper.authors,
@@ -77,6 +94,10 @@ export function paperToRemoteRow(paper: Paper): RemotePaperRow {
     content_hash: paper.contentHash ?? null,
     file_size: paper.fileSize
   }
+  // Re-attach the desktop-only columns captured on the last pull. The mobile's
+  // own fields always win over a same-named extra, so nothing here shadows a
+  // value the user edited on this device.
+  return paper.remoteExtras ? { ...paper.remoteExtras, ...known } : known
 }
 
 export function annotationToRemoteRow(annotation: Annotation): RemoteAnnotationRow {
@@ -140,7 +161,7 @@ export function remoteRowToPaper(
   row: RemotePaperRow,
   existing: Paper | undefined
 ): Paper {
-  return {
+  const paper: Paper = {
     id: row.id,
     title: row.title,
     authors: row.authors,
@@ -156,6 +177,19 @@ export function remoteRowToPaper(
     // reader on first open.
     pageCount: existing?.pageCount ?? null
   }
+  // Capture any desktop-only columns so a later push echoes them back verbatim.
+  const extras: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(row as unknown as Record<string, unknown>)) {
+    if (!KNOWN_PAPER_KEYS.has(key)) extras[key] = value
+  }
+  if (Object.keys(extras).length > 0) {
+    paper.remoteExtras = extras
+  } else if (existing?.remoteExtras) {
+    // A meta that carries no extra columns at all (a pre-metadata-v2 desktop
+    // build) must not wipe what we already preserved locally.
+    paper.remoteExtras = existing.remoteExtras
+  }
+  return paper
 }
 
 export function remoteRowToAnnotation(

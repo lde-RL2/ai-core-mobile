@@ -471,6 +471,21 @@
   align-items: center;
 }
 
+.sync-readonly-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sync-readonly-toggle input {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
 .sync-provider {
   display: flex;
   flex-direction: column;

@@ -15,6 +15,12 @@ export interface SyncState {
   syncTarget: SyncTarget
   libraryUpdatedAt: number
 
+  /** Download-only mode: pull remote changes but never upload this device's
+   *  edits. Keeps phone/tablet edits local so they never reach Notion/Drive or
+   *  the desktop app. Defaults on — the mobile row shape is a subset of the
+   *  desktop's, so pushing would strip desktop-only paper metadata. */
+  readOnlySync: boolean
+
   googleClientId: string | null
   driveFolderIds: DriveFolderIds | null
   driveDirty: string[]
@@ -55,6 +61,7 @@ export function hasBundledNotionProxy(): boolean {
 const DEFAULT_STATE: SyncState = {
   syncTarget: 'none',
   libraryUpdatedAt: 0,
+  readOnlySync: true,
   googleClientId: null,
   driveFolderIds: null,
   driveDirty: [],
@@ -106,6 +113,11 @@ export function usesGoogleDrive(target: SyncTarget = loadSyncState().syncTarget)
 
 export function usesNotion(target: SyncTarget = loadSyncState().syncTarget): boolean {
   return target === 'notion' || target === 'both'
+}
+
+/** True when this device only downloads and never uploads. */
+export function isReadOnlySync(): boolean {
+  return loadSyncState().readOnlySync
 }
 
 export function addDirty(key: 'driveDirty' | 'notionDirty', paperId: string): void {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   hasBundledGoogleClientId,
   hasBundledNotionProxy,
+  isReadOnlySync,
   loadSyncState,
   updateSyncState,
   usesGoogleDrive,
@@ -121,6 +122,27 @@ export function SyncSettings(): React.JSX.Element {
           </button>
         ))}
       </div>
+
+      {state.syncTarget !== 'none' && (
+        <>
+          <label className="sync-readonly-toggle">
+            <input
+              type="checkbox"
+              checked={isReadOnlySync()}
+              onChange={(e) => {
+                updateSyncState({ readOnlySync: e.target.checked })
+                rerender()
+              }}
+            />
+            <span>다운로드 전용 (이 기기의 변경 사항을 올리지 않음)</span>
+          </label>
+          <p className="settings-note faint">
+            {isReadOnlySync()
+              ? '데스크톱에서 올린 논문·주석은 이 기기로 내려오지만, 이 기기에서 추가·수정·삭제한 내용은 서버와 데스크톱에 반영되지 않고 기기에만 남습니다.'
+              : '양방향 동기화 — 이 기기의 변경 사항도 서버에 업로드됩니다. 데스크톱에서 입력한 초록·저자 등 상세 서지정보가 이 기기의 편집으로 덮여 사라질 수 있으니 주의하세요.'}
+          </p>
+        </>
+      )}
 
       {usesGoogleDrive(state.syncTarget) && (
         <div className="sync-provider">
