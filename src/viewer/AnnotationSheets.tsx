@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Annotation, AnnotationType } from '../types'
 import { ANNOTATION_COLORS } from '../types'
 
@@ -74,7 +74,34 @@ export function AnnotationEditSheet(props: AnnotationEditSheetProps): React.JSX.
   // converted into highlight/underline (or back).
   const spatial = props.annotation.type === 'area' || props.annotation.type === 'note'
 
+  // The backdrop tap saves, but the hardware back button unmounts the whole
+  // reader without passing through it — a memo mid-typing was lost. Flush any
+  // dirty edit on unmount unless an explicit save/delete already handled it.
+  const latestRef = useRef({ type, color, note })
+  latestRef.current = { type, color, note }
+  const doneRef = useRef(false)
+  const propsRef = useRef(props)
+  propsRef.current = props
+
+  useEffect(() => {
+    return () => {
+      if (doneRef.current) return
+      const current = latestRef.current
+      const original = propsRef.current.annotation
+      const nextNote = current.note.trim() || null
+      if (
+        current.type === original.type &&
+        current.color === original.color &&
+        nextNote === (original.note ?? null)
+      ) {
+        return
+      }
+      propsRef.current.onSave({ type: current.type, color: current.color, note: nextNote })
+    }
+  }, [])
+
   function save(): void {
+    doneRef.current = true
     props.onSave({ type, color, note: note.trim() || null })
   }
 
@@ -129,7 +156,13 @@ export function AnnotationEditSheet(props: AnnotationEditSheetProps): React.JSX.
             <button className="primary-button" onClick={save}>
               저장
             </button>
-            <button className="danger-button" onClick={props.onDelete}>
+            <button
+              className="danger-button"
+              onClick={() => {
+                doneRef.current = true
+                props.onDelete()
+              }}
+            >
               삭제
             </button>
           </div>

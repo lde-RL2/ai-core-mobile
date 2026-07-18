@@ -310,9 +310,56 @@ try {
   })()`)
   console.log(`21. 활성 탭 아이콘이 강조색 상속 ✓ (${accent})`)
 
+  // ---- H. Back-button no longer loses typed notes (data-loss regression) ----
+  await evalJs(`document.querySelector('.paper-card .paper-more').click(); true`)
+  await waitFor('detail sheet', `!!document.querySelector('#detail-notes')`)
+  await evalJs(`(() => {
+    const el = document.querySelector('#detail-notes')
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set
+    setter.call(el, '뒤로가기 유실 테스트 메모')
+    el.dispatchEvent(new Event('input', { bubbles: true }))
+    el.focus() // keep focus so no blur-save can fire
+    return true
+  })()`)
+  await delay(150)
+  // Hardware back: popstate unmounts the sheet without any blur.
+  await evalJs(`history.back(); true`)
+  await waitFor('sheet closed', `!document.querySelector('#detail-notes')`)
+  await delay(300)
+  await evalJs(`document.querySelector('.paper-card .paper-more').click(); true`)
+  await waitFor('detail sheet reopened', `!!document.querySelector('#detail-notes')`)
+  const savedNote = await waitFor('note persisted',
+    `document.querySelector('#detail-notes').value.includes('뒤로가기 유실') ? document.querySelector('#detail-notes').value : ''`, 6000)
+  console.log(`23. 뒤로가기로 닫아도 메모 저장됨 ✓ ("${savedNote}")`)
+  await evalJs(`history.back(); true`)
+  await waitFor('sheet closed again', `!document.querySelector('#detail-notes')`)
+  await delay(300)
+
+  // ---- I. Zoom is remembered per paper ----
+  await evalJs(`document.querySelector('.paper-card').click(); true`)
+  await waitFor('reader reopened', `!!document.querySelector('.reader-scroll')`)
+  await evalJs(`document.querySelector('button[aria-label="확대"]').click(); true`)
+  await delay(200)
+  const zoomStored = await waitFor('zoom persisted to storage',
+    `(() => { try { const m = JSON.parse(localStorage.getItem('aicore.zoomByPaper') || '{}'); const v = Object.values(m)[0]; return v && v > 1 ? String(v) : '' } catch { return '' } })()`, 6000)
+  await evalJs(`history.back(); true`)
+  await waitFor('reader closed', `!document.querySelector('.reader-scroll')`)
+  await delay(300)
+  await evalJs(`document.querySelector('.paper-card').click(); true`)
+  await waitFor('reader restored', `!!document.querySelector('.reader-scroll')`)
+  const zoomApplied = await waitFor('restored zoom widens the content',
+    `(() => {
+      const scroll = document.querySelector('.reader-scroll')
+      const content = document.querySelector('.reader-content')
+      return content && scroll && content.scrollWidth > scroll.clientWidth + 8 ? 'wider' : ''
+    })()`, 8000)
+  console.log(`24. 확대 배율 기억·복원 ✓ (저장값 ${zoomStored}, 재열람 시 ${zoomApplied})`)
+  await evalJs(`history.back(); true`)
+  await delay(300)
+
   const nativeUsed = await evalJs(`window.__nativeUsed`)
   if (nativeUsed) throw new Error('네이티브 대화상자가 호출됨!')
-  console.log('22. 네이티브 대화상자 호출 0회 ✓')
+  console.log('25. 네이티브 대화상자 호출 0회 ✓')
 
   console.log('\nGUI VERIFY PASSED')
   cleanup()

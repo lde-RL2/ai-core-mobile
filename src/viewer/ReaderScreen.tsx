@@ -12,6 +12,7 @@ import { destinationToPageNumber, flattenOutline, type OutlineEntry } from './pd
 import { detectColumns, type ColumnLayout } from './columnDetect'
 import { useDialogs } from '../components/Dialogs'
 import { Icon } from '../components/Icon'
+import { loadPaperZoom, savePaperZoom } from './zoomMemory'
 
 const PAGE_GAP = 14
 const SIDE_PADDING = 8
@@ -42,7 +43,10 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null)
   const [dims, setDims] = useState<PageDim[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [zoom, setZoom] = useState(1)
+  // Reopening a paper restores the zoom it was last read at — otherwise every
+  // open of a two-column paper started at fit-width and needed the same
+  // double-tap again.
+  const [zoom, setZoom] = useState(() => loadPaperZoom(paper.id) ?? 1)
   const [containerWidth, setContainerWidth] = useState(0)
   const [annotations, setAnnotations] = useState<Annotation[]>([])
   const [currentPage, setCurrentPage] = useState(1)
@@ -70,6 +74,10 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
   const contentRef = useRef<HTMLDivElement>(null)
   const zoomRef = useRef(zoom)
   zoomRef.current = zoom
+
+  useEffect(() => {
+    savePaperZoom(paper.id, zoom)
+  }, [paper.id, zoom])
   const pendingScrollRef = useRef<{ left: number; top: number } | null>(null)
   const initialStateRef = useRef<{ fraction: number } | null>(null)
   const restoredRef = useRef(false)
@@ -105,15 +113,39 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
           }
         }
         setAnnotations(annotationRows)
-        const pageDims: PageDim[] = []
-        for (let i = 1; i <= pdf.numPages; i += 1) {
-          const page = await pdf.getPage(i)
-          if (cancelled) return
-          const viewport = page.getViewport({ scale: 1 })
-          pageDims.push({ w: viewport.width, h: viewport.height })
-        }
+        // First paint used to wait for a getPage() round-trip per page — a
+        // 300-page thesis stared at a blank screen for seconds. Papers have
+        // uniform pages, so lay out immediately with page 1's size as the
+        // estimate and correct any pages that differ in the background.
+        const firstPage = await pdf.getPage(1)
+        if (cancelled) return
+        const firstViewport = firstPage.getViewport({ scale: 1 })
+        const estimate: PageDim = { w: firstViewport.width, h: firstViewport.height }
         setDoc(pdf)
-        setDims(pageDims)
+        setDims(Array.from({ length: pdf.numPages }, () => estimate))
+        void (async () => {
+          const real: PageDim[] = Array.from({ length: pdf.numPages }, () => estimate)
+          let corrected = false
+          for (let i = 2; i <= pdf.numPages; i += 1) {
+            try {
+              const page = await pdf.getPage(i)
+              if (cancelled) return
+              const viewport = page.getViewport({ scale: 1 })
+              if (
+                Math.abs(viewport.width - estimate.w) > 0.5 ||
+                Math.abs(viewport.height - estimate.h) > 0.5
+              ) {
+                real[i - 1] = { w: viewport.width, h: viewport.height }
+                corrected = true
+              }
+            } catch {
+              // Keep the estimate for an unreadable page.
+            }
+          }
+          // One relayout at the end, and only for genuinely mixed-size
+          // documents — the common all-uniform paper never relayouts.
+          if (!cancelled && corrected) setDims(real)
+        })()
         // Infer the column layout from a few body pages. Papers are uniform, so
         // the first page that reads as two columns settles it; page 1 alone is
         // unreliable (title blocks and abstracts often span the full width).

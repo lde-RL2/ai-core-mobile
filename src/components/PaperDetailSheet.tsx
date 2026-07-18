@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Collection, Paper, Tag } from '../types'
 import * as db from '../storage/db'
 import { useDialogs } from './Dialogs'
@@ -36,8 +36,37 @@ export function PaperDetailSheet(props: PaperDetailSheetProps): React.JSX.Elemen
     }
   }, [paper.id])
 
+  // The fields save on blur, but the Android back button unmounts the sheet
+  // without ever blurring the focused input — typed text silently vanished.
+  // Track the latest values and flush any unsaved edit on unmount.
+  const paperRef = useRef(paper)
+  paperRef.current = paper
+  const latestRef = useRef({ title, notes })
+  latestRef.current = { title, notes }
+  const savedRef = useRef({ title: paper.title, notes: paper.notes ?? '' })
+  const refreshRef = useRef(props.refresh)
+  refreshRef.current = props.refresh
+
+  useEffect(() => {
+    return () => {
+      const current = latestRef.current
+      const nextTitle = current.title.trim() || paperRef.current.title
+      const nextNotes = current.notes.trim()
+      if (nextTitle === savedRef.current.title && nextNotes === savedRef.current.notes) return
+      void db
+        .putPaper({
+          ...paperRef.current,
+          title: nextTitle,
+          notes: nextNotes || null,
+          updatedAt: Date.now()
+        })
+        .then(() => refreshRef.current())
+    }
+  }, [])
+
   async function saveTitleAndNotes(): Promise<void> {
     const trimmedTitle = title.trim() || paper.title
+    savedRef.current = { title: trimmedTitle, notes: notes.trim() }
     await db.putPaper({
       ...paper,
       title: trimmedTitle,

@@ -35,9 +35,26 @@ function formatAuthors(authors: string | null): string {
   return authors.length > 80 ? `${authors.slice(0, 77)}…` : authors
 }
 
+interface ImportProgress {
+  done: number
+  total: number
+  currentName: string
+}
+
+/** A quota failure surfaced as a raw browser error; say what actually
+ *  happened and where to check. */
+function importErrorMessage(error: unknown): string {
+  const name = error instanceof DOMException ? error.name : ''
+  const text = error instanceof Error ? error.message : String(error)
+  if (name === 'QuotaExceededError' || /quota/i.test(text)) {
+    return '기기 저장 공간이 부족해 가져오지 못했습니다. 설정 → 저장 공간에서 사용량을 확인하거나 안 읽는 논문을 정리해 보세요.'
+  }
+  return text || '가져오기에 실패했습니다'
+}
+
 export function LibraryScreen(props: LibraryScreenProps): React.JSX.Element {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [importing, setImporting] = useState<number | null>(null)
+  const [importing, setImporting] = useState<ImportProgress | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
   const [shown, setShown] = useState(BATCH)
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -70,14 +87,13 @@ export function LibraryScreen(props: LibraryScreenProps): React.JSX.Element {
       (file) => file.type === 'application/pdf' || /\.pdf$/i.test(file.name)
     )
     if (list.length === 0) return
-    setImporting(list.length)
     try {
-      for (const file of list) {
+      for (const [index, file] of list.entries()) {
+        setImporting({ done: index, total: list.length, currentName: file.name })
         await importPdfFile(file, props.selectedCollectionId)
-        setImporting((n) => (n === null ? null : n - 1))
       }
     } catch (error) {
-      setImportError(error instanceof Error ? error.message : '가져오기에 실패했습니다')
+      setImportError(importErrorMessage(error))
     } finally {
       setImporting(null)
       props.onImported()
@@ -151,6 +167,23 @@ export function LibraryScreen(props: LibraryScreenProps): React.JSX.Element {
       </header>
 
       {importError && <div className="inline-error">{importError}</div>}
+
+      {importing && (
+        <div className="import-progress" role="status">
+          <div className="import-progress-row">
+            <span className="import-progress-name">{importing.currentName}</span>
+            <span className="import-progress-count">
+              {importing.done + 1} / {importing.total}
+            </span>
+          </div>
+          <div className="import-progress-track" aria-hidden>
+            <div
+              className="import-progress-fill"
+              style={{ width: `${((importing.done + 0.5) / importing.total) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {props.resumePaper && (
         <button
@@ -260,7 +293,7 @@ export function LibraryScreen(props: LibraryScreenProps): React.JSX.Element {
         disabled={importing !== null}
         onClick={() => fileInputRef.current?.click()}
       >
-        {importing !== null ? `${importing}…` : <Icon name="plus" size={26} />}
+        {importing !== null ? `${importing.total - importing.done}…` : <Icon name="plus" size={26} />}
       </button>
     </div>
   )

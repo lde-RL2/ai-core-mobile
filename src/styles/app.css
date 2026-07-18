@@ -1198,6 +1198,53 @@
   display: none;
 }
 
+.import-progress {
+  margin: 10px 12px 0;
+  padding: 10px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.import-progress-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.import-progress-name {
+  font-size: var(--text-base);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-progress-count {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.import-progress-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-bg-hover);
+  overflow: hidden;
+}
+
+.import-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-accent);
+  transition: width var(--motion-base) var(--ease-out);
+}
+
 .resume-card {
   display: flex;
   flex-direction: column;
