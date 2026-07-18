@@ -3,6 +3,35 @@ import type { Paper, ReadingState, Tag } from '../types'
 import { importPdfFile } from '../storage/importPaper'
 import { SORT_LABELS, type PaperSort } from '../sortPapers'
 import { Icon } from './Icon'
+import { requestThumbnail } from '../storage/thumbs'
+
+/** First-page preview. Falls back to a paper-toned placeholder while the
+ *  thumbnail is being generated (or when the PDF cannot be rendered). */
+function PaperThumb({ paperId }: { paperId: string }): React.JSX.Element {
+  const [url, setUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    let objectUrl: string | null = null
+    void requestThumbnail(paperId).then((blob) => {
+      if (cancelled || !blob) return
+      objectUrl = URL.createObjectURL(blob)
+      setUrl(objectUrl)
+    })
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [paperId])
+
+  return url ? (
+    <img className="paper-thumb" src={url} alt="" loading="lazy" />
+  ) : (
+    <span className="paper-thumb placeholder" aria-hidden>
+      <Icon name="library" size={17} />
+    </span>
+  )
+}
 
 interface LibraryScreenProps {
   papers: Paper[]
@@ -190,16 +219,21 @@ export function LibraryScreen(props: LibraryScreenProps): React.JSX.Element {
           className="resume-card"
           onClick={() => props.onOpenPaper(props.resumePaper!.id)}
         >
-          <span className="resume-label">이어서 읽기</span>
-          <span className="resume-title">{props.resumePaper.title}</span>
-          <span className="resume-progress">
-            {(() => {
-              const reading = props.readingByPaper.get(props.resumePaper.id)
-              const total = props.resumePaper.pageCount
-              return reading && total
-                ? `${reading.lastPage} / ${total}쪽 · ${Math.min(100, Math.round((reading.lastPage / total) * 100))}%`
-                : '이어서 보기'
-            })()}
+          <span className="resume-thumb">
+            <PaperThumb paperId={props.resumePaper.id} />
+          </span>
+          <span className="resume-body">
+            <span className="resume-label">이어서 읽기</span>
+            <span className="resume-title">{props.resumePaper.title}</span>
+            <span className="resume-progress">
+              {(() => {
+                const reading = props.readingByPaper.get(props.resumePaper.id)
+                const total = props.resumePaper.pageCount
+                return reading && total
+                  ? `${reading.lastPage} / ${total}쪽 · ${Math.min(100, Math.round((reading.lastPage / total) * 100))}%`
+                  : '이어서 보기'
+              })()}
+            </span>
           </span>
         </button>
       )}
@@ -236,6 +270,7 @@ export function LibraryScreen(props: LibraryScreenProps): React.JSX.Element {
               className="paper-card"
               onClick={() => props.onOpenPaper(paper.id)}
             >
+              <PaperThumb paperId={paper.id} />
               <div className="paper-card-body">
                 <h2 className="paper-title">{paper.title}</h2>
                 <p className="paper-meta">

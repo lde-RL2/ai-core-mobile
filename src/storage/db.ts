@@ -7,7 +7,7 @@ import type {
 } from '../types'
 
 const DB_NAME = 'ai-core-mobile'
-const DB_VERSION = 2
+const DB_VERSION = 3
 
 const STORES = {
   papers: 'papers',
@@ -18,7 +18,10 @@ const STORES = {
   paperTags: 'paperTags',
   annotations: 'annotations',
   readingState: 'readingState',
-  deletedPapers: 'deletedPapers'
+  deletedPapers: 'deletedPapers',
+  /** First-page preview images (v3). Regenerable from the PDF, so backups and
+   *  sync never carry them. */
+  thumbnails: 'thumbnails'
 } as const
 
 // ---------- sync hooks ----------
@@ -112,6 +115,9 @@ function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORES.deletedPapers)) {
         db.createObjectStore(STORES.deletedPapers, { keyPath: 'id' })
       }
+      if (!db.objectStoreNames.contains(STORES.thumbnails)) {
+        db.createObjectStore(STORES.thumbnails)
+      }
     }
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error ?? new Error('IndexedDB를 열 수 없습니다'))
@@ -173,6 +179,16 @@ export async function getPdfFile(paperId: string): Promise<Blob | undefined> {
   return withStore<Blob | undefined>(STORES.pdfFiles, 'readonly', (s) => s.get(paperId))
 }
 
+// ---------- first-page thumbnails ----------
+
+export async function getThumbnail(paperId: string): Promise<Blob | undefined> {
+  return withStore<Blob | undefined>(STORES.thumbnails, 'readonly', (s) => s.get(paperId))
+}
+
+export async function saveThumbnail(paperId: string, blob: Blob): Promise<void> {
+  await withStore(STORES.thumbnails, 'readwrite', (s) => s.put(blob, paperId))
+}
+
 export async function deletePaper(id: string, deletedAt = Date.now()): Promise<void> {
   const db = await openDb()
   const tx = db.transaction(
@@ -183,12 +199,14 @@ export async function deletePaper(id: string, deletedAt = Date.now()): Promise<v
       STORES.paperTags,
       STORES.annotations,
       STORES.readingState,
-      STORES.deletedPapers
+      STORES.deletedPapers,
+      STORES.thumbnails
     ],
     'readwrite'
   )
   tx.objectStore(STORES.papers).delete(id)
   tx.objectStore(STORES.pdfFiles).delete(id)
+  tx.objectStore(STORES.thumbnails).delete(id)
   tx.objectStore(STORES.readingState).delete(id)
   tx.objectStore(STORES.deletedPapers).put({ id, deletedAt })
   for (const [storeName, index] of [
