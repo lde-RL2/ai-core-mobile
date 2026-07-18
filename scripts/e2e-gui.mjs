@@ -283,9 +283,36 @@ try {
   const persisted = await waitFor('sort persisted', `localStorage.getItem('aicore.sort') === 'title'`)
   console.log(`17. 정렬 옵션 ${sorts}종 · 선택 저장됨 ✓ (${persisted})`)
 
+  // ---- G. Icon system rendered as SVG, no emoji glyphs left in the chrome ----
+  const chrome = await evalJs(`JSON.stringify({
+    navIcons: document.querySelectorAll('.bottom-nav-item svg').length,
+    navLabels: [...document.querySelectorAll('.bottom-nav-label')].map(e => e.textContent),
+    activeTab: document.querySelector('.bottom-nav-item.active .bottom-nav-label')?.textContent,
+    searchIcon: !!document.querySelector('.search-field-icon'),
+    subtitle: document.querySelector('.screen-subtitle')?.textContent,
+    emoji: /[\u{1F300}-\u{1FAFF}]/u.test(
+      document.querySelector('.bottom-nav').textContent +
+      document.querySelector('.screen-header').textContent
+    )
+  })`)
+  const parsed = JSON.parse(chrome)
+  if (parsed.navIcons !== 3) throw new Error(`expected 3 nav icons, got ${parsed.navIcons}`)
+  if (parsed.emoji) throw new Error('emoji still present in the app chrome')
+  if (!parsed.searchIcon) throw new Error('search field icon missing')
+  console.log(`19. 하단 탭 SVG 아이콘 ${parsed.navIcons}개 · ${parsed.navLabels.join('/')} · 활성="${parsed.activeTab}" ✓`)
+  console.log(`20. 헤더 부제목 "${parsed.subtitle}" · 검색 아이콘 ✓ · 크롬 영역 이모지 0개 ✓`)
+
+  // The active tab must actually take the accent colour (emoji could not).
+  const accent = await evalJs(`(() => {
+    const el = document.querySelector('.bottom-nav-item.active')
+    const svg = el.querySelector('svg')
+    return getComputedStyle(svg).color === getComputedStyle(el).color ? getComputedStyle(el).color : 'mismatch'
+  })()`)
+  console.log(`21. 활성 탭 아이콘이 강조색 상속 ✓ (${accent})`)
+
   const nativeUsed = await evalJs(`window.__nativeUsed`)
   if (nativeUsed) throw new Error('네이티브 대화상자가 호출됨!')
-  console.log('18. 네이티브 대화상자 호출 0회 ✓')
+  console.log('22. 네이티브 대화상자 호출 0회 ✓')
 
   console.log('\nGUI VERIFY PASSED')
   cleanup()

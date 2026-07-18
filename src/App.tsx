@@ -10,6 +10,7 @@ import { BottomNav } from './components/BottomNav'
 import { PaperDetailSheet } from './components/PaperDetailSheet'
 import { ReaderScreen } from './viewer/ReaderScreen'
 import { findResumePaper, isPaperSort, sortPapers, type PaperSort } from './sortPapers'
+import { Icon } from './components/Icon'
 
 type Tab = 'library' | 'collections' | 'settings'
 
@@ -354,7 +355,7 @@ export default function App(): React.JSX.Element {
             aria-label="닫기"
             onClick={() => setUpdateReady(false)}
           >
-            ✕
+            <Icon name="close" size={15} />
           </button>
         </div>
       )}

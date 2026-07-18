@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Paper, ReadingState, Tag } from '../types'
 import { importPdfFile } from '../storage/importPaper'
 import { SORT_LABELS, type PaperSort } from '../sortPapers'
+import { Icon } from './Icon'
 
 interface LibraryScreenProps {
   papers: Paper[]
@@ -94,7 +95,14 @@ export function LibraryScreen(props: LibraryScreenProps): React.JSX.Element {
     >
       <header className="screen-header">
         <div className="screen-header-row">
-          <h1>{props.filterLabel ?? '라이브러리'}</h1>
+          <div className="screen-title-block">
+            <h1>{props.filterLabel ?? '라이브러리'}</h1>
+            <p className="screen-subtitle">
+              {props.papers.length === props.totalCount
+                ? `논문 ${props.totalCount}편`
+                : `${props.papers.length} / ${props.totalCount}편`}
+            </p>
+          </div>
           <div className="screen-header-actions">
             {props.filterLabel && (
               <button className="chip-button" onClick={props.onClearFilter}>
@@ -103,18 +111,30 @@ export function LibraryScreen(props: LibraryScreenProps): React.JSX.Element {
             )}
             {props.showSettingsButton && (
               <button className="icon-button" aria-label="설정" onClick={props.onOpenSettings}>
-                ⚙️
+                <Icon name="settings" size={21} />
               </button>
             )}
           </div>
         </div>
-        <input
-          className="search-input"
-          type="search"
-          placeholder="제목·저자·메모 검색"
-          value={props.search}
-          onChange={(e) => props.setSearch(e.target.value)}
-        />
+        <div className="search-field">
+          <Icon name="search" size={17} className="search-field-icon" />
+          <input
+            className="search-input"
+            type="search"
+            placeholder="제목·저자·메모 검색"
+            value={props.search}
+            onChange={(e) => props.setSearch(e.target.value)}
+          />
+          {props.search && (
+            <button
+              className="search-clear"
+              aria-label="검색어 지우기"
+              onClick={() => props.setSearch('')}
+            >
+              <Icon name="close" size={15} />
+            </button>
+          )}
+        </div>
         <div className="sort-row">
           <div className="segmented compact">
             {(Object.keys(SORT_LABELS) as PaperSort[]).map((option) => (
@@ -154,13 +174,19 @@ export function LibraryScreen(props: LibraryScreenProps): React.JSX.Element {
       <div className="paper-list">
         {props.papers.length === 0 && (
           <div className="empty-state">
+            <span className="empty-icon" aria-hidden>
+              <Icon name={props.totalCount === 0 ? 'library' : 'search'} size={34} />
+            </span>
             {props.totalCount === 0 ? (
               <>
-                <p>아직 논문이 없습니다.</p>
+                <p className="empty-title">아직 논문이 없습니다</p>
                 <p>오른쪽 아래 + 버튼으로 PDF를 가져오세요.</p>
               </>
             ) : (
-              <p>검색/필터 조건에 맞는 논문이 없습니다.</p>
+              <>
+                <p className="empty-title">결과가 없습니다</p>
+                <p>다른 검색어나 필터를 시도해 보세요.</p>
+              </>
             )}
           </div>
         )}
@@ -206,7 +232,7 @@ export function LibraryScreen(props: LibraryScreenProps): React.JSX.Element {
                   props.onOpenDetail(paper.id)
                 }}
               >
-                ⋯
+                <Icon name="more" size={19} />
               </button>
             </article>
           )
@@ -234,7 +260,7 @@ export function LibraryScreen(props: LibraryScreenProps): React.JSX.Element {
         disabled={importing !== null}
         onClick={() => fileInputRef.current?.click()}
       >
-        {importing !== null ? `${importing}…` : '+'}
+        {importing !== null ? `${importing}…` : <Icon name="plus" size={26} />}
       </button>
     </div>
   )

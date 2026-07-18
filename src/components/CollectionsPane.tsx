@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { Collection, Tag } from '../types'
 import * as db from '../storage/db'
 import { useDialogs } from './Dialogs'
+import { Icon } from './Icon'
 
 interface CollectionsPaneProps {
   collections: Collection[]
@@ -122,7 +123,8 @@ export function CollectionsPane(props: CollectionsPaneProps): React.JSX.Element 
             {isCollapsed ? '▸' : '▾'}
           </button>
           <button className="tree-label" onClick={() => props.onSelectCollection(collection.id)}>
-            📁 {collection.name}
+            <Icon name="collections" size={17} className="tree-icon" />
+            {collection.name}
           </button>
           <span className="tree-actions">
             <button
@@ -130,21 +132,21 @@ export function CollectionsPane(props: CollectionsPaneProps): React.JSX.Element 
               aria-label="하위 컬렉션 추가"
               onClick={() => void createCollection(collection.id)}
             >
-              ＋
+              <Icon name="plus" size={15} />
             </button>
             <button
               className="icon-button small"
               aria-label="이름 변경"
               onClick={() => void renameCollection(collection)}
             >
-              ✎
+              <Icon name="annotate" size={14} />
             </button>
             <button
               className="icon-button small danger"
               aria-label="삭제"
               onClick={() => void deleteCollection(collection)}
             >
-              ✕
+              <Icon name="close" size={14} />
             </button>
           </span>
         </div>
@@ -175,7 +177,8 @@ export function CollectionsPane(props: CollectionsPaneProps): React.JSX.Element 
             ▾
           </span>
           <button className="tree-label" onClick={() => props.onSelectCollection(null)}>
-            📚 전체 라이브러리
+            <Icon name="library" size={17} className="tree-icon" />
+            전체 라이브러리
           </button>
         </div>
         {tree.map((node) => renderNode(node, 0))}

@@ -11,6 +11,7 @@ import { OutlineSheet } from './OutlineSheet'
 import { destinationToPageNumber, flattenOutline, type OutlineEntry } from './pdfDest'
 import { detectColumns, type ColumnLayout } from './columnDetect'
 import { useDialogs } from '../components/Dialogs'
+import { Icon } from '../components/Icon'
 
 const PAGE_GAP = 14
 const SIDE_PADDING = 8
@@ -676,7 +677,7 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
     <div className="reader">
       <header className={chromeVisible ? 'reader-topbar' : 'reader-topbar hidden'}>
         <button className="icon-button" aria-label="뒤로" onClick={props.onClose}>
-          ‹
+          <Icon name="back" size={22} />
         </button>
         <span className="reader-title">{paper.title}</span>
         <button className="reader-page-indicator" onClick={() => void promptPageJump()}>
@@ -687,21 +688,21 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
           aria-label="축소"
           onClick={() => setZoomAnchoredAtCenter(zoom / 1.25)}
         >
-          −
+          <Icon name="minus" size={20} />
         </button>
         <button
           className="icon-button"
           aria-label="확대"
           onClick={() => setZoomAnchoredAtCenter(zoom * 1.25)}
         >
-          ＋
+          <Icon name="plus" size={20} />
         </button>
         <button
           className="icon-button"
           aria-label="본문 검색"
           onClick={() => setSearchOpen((open) => !open)}
         >
-          🔍
+          <Icon name="search" size={20} />
         </button>
         {columnLayout && columnLayout.columns.length > 1 && (
           <button
@@ -710,12 +711,12 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
             aria-pressed={columnMode}
             onClick={toggleColumnMode}
           >
-            ▥
+            <Icon name="columns" size={20} />
           </button>
         )}
         {outline.length > 0 && (
           <button className="icon-button" aria-label="목차" onClick={() => setOutlineOpen(true)}>
-            ☰
+            <Icon name="outline" size={20} />
           </button>
         )}
         <button
@@ -724,17 +725,17 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
           aria-pressed={tool !== 'none'}
           onClick={() => setTool((current) => (current === 'none' ? 'note' : 'none'))}
         >
-          📝
+          <Icon name="annotate" size={20} />
         </button>
         <button className="icon-button" aria-label="주석 목록" onClick={() => setListOpen(true)}>
-          📑
+          <Icon name="marks" size={20} />
         </button>
       </header>
 
       {textless && !scanNoticeDismissed && (
         <div className="reader-notice">
           <span>
-            스캔된 이미지 PDF입니다. 텍스트 선택·검색은 되지 않지만, 📝 도구로 메모와 영역
+            스캔된 이미지 PDF입니다. 텍스트 선택·검색은 되지 않지만, 주석 도구로 메모와 영역
             표시는 할 수 있습니다.
           </span>
           <button
@@ -742,7 +743,7 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
             aria-label="안내 닫기"
             onClick={() => setScanNoticeDismissed(true)}
           >
-            ✕
+            <Icon name="close" size={15} />
           </button>
         </div>
       )}
@@ -753,13 +754,13 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
             className={tool === 'note' ? 'column-step primary' : 'column-step'}
             onClick={() => setTool('note')}
           >
-            📌 메모 찍기
+            <Icon name="note" size={17} /> 메모 찍기
           </button>
           <button
             className={tool === 'area' ? 'column-step primary' : 'column-step'}
             onClick={() => setTool('area')}
           >
-            ⬚ 영역 표시
+            <Icon name="area" size={17} /> 영역 표시
           </button>
           <button className="column-step" onClick={() => setTool('none')}>
             취소

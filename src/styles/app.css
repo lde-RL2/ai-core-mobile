@@ -62,13 +62,26 @@
   gap: 8px;
 }
 
+.screen-title-block {
+  min-width: 0;
+}
+
 .screen-header h1 {
   margin: 0;
-  font-size: var(--text-xl);
+  font-size: 22px;
   font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.screen-subtitle {
+  margin: 2px 0 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-faint);
+  font-variant-numeric: tabular-nums;
 }
 
 .screen-header h2,
@@ -85,18 +98,53 @@
   flex-shrink: 0;
 }
 
+.search-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-field-icon {
+  position: absolute;
+  left: 11px;
+  color: var(--color-text-faint);
+  pointer-events: none;
+}
+
 .search-input {
   width: 100%;
-  padding: 9px 12px;
-  border: 1px solid var(--color-border);
+  padding: 10px 12px 10px 34px;
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
-  background: var(--color-bg-elevated);
+  background: var(--color-bg-hover);
   font-size: var(--text-body);
+  transition:
+    background-color var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out);
+}
+
+.search-input::-webkit-search-cancel-button {
+  display: none;
 }
 
 .search-input:focus {
-  outline: 2px solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+  outline: none;
+  background: var(--color-bg-elevated);
   border-color: var(--color-accent);
+}
+
+.search-clear {
+  position: absolute;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-muted);
 }
 
 /* ---------- paper list ---------- */
@@ -307,8 +355,18 @@
 .bottom-nav {
   display: flex;
   border-top: 1px solid var(--color-border);
-  background: var(--color-bg-elevated);
+  /* Translucent so content scrolling underneath reads as depth rather than a
+     hard cut; falls back to the solid colour where backdrop-filter is absent. */
+  background: color-mix(in srgb, var(--color-bg-elevated) 82%, transparent);
+  backdrop-filter: saturate(1.6) blur(14px);
+  -webkit-backdrop-filter: saturate(1.6) blur(14px);
   padding-bottom: var(--safe-bottom);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .bottom-nav {
+    background: var(--color-bg-elevated);
+  }
 }
 
 .bottom-nav-item {
@@ -316,21 +374,47 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 8px 0 6px;
+  gap: 3px;
+  padding: 7px 0 5px;
   border: 0;
   background: transparent;
   color: var(--color-text-muted);
   font-size: var(--text-xs);
+  transition: color var(--motion-fast) var(--ease-out);
+}
+
+/* The pill sits behind the glyph only, so the label keeps its own rhythm. */
+.bottom-nav-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 30px;
+  border-radius: 999px;
+  transition:
+    background-color var(--motion-base) var(--ease-out),
+    transform var(--motion-base) var(--ease-out);
 }
 
 .bottom-nav-item.active {
   color: var(--color-accent);
-  font-weight: 600;
 }
 
-.bottom-nav-icon {
-  font-size: var(--text-xl);
+.bottom-nav-item.active .bottom-nav-icon {
+  background: color-mix(in srgb, var(--color-accent) 15%, transparent);
+}
+
+.bottom-nav-item:active .bottom-nav-icon {
+  transform: scale(0.92);
+}
+
+.bottom-nav-label {
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.bottom-nav-item.active .bottom-nav-label {
+  font-weight: 600;
 }
 
 /* ---------- collections ---------- */
@@ -364,7 +448,11 @@
   flex-shrink: 0;
 }
 
+/* Icon + label share a row so long collection names still ellipsize. */
 .tree-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   flex: 1;
   min-width: 0;
   border: 0;
@@ -413,6 +501,25 @@
   color: var(--color-text-faint);
   font-size: var(--text-base);
   margin: 8px 4px;
+}
+
+.empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 66px;
+  height: 66px;
+  margin-bottom: 4px;
+  border-radius: 50%;
+  background: var(--color-bg-hover);
+  color: var(--color-text-faint);
+}
+
+.empty-title {
+  font-size: var(--text-lg);
+  font-weight: 650;
+  color: var(--color-text);
+  margin: 0;
 }
 
 .empty-state {
@@ -1020,7 +1127,12 @@
 .paper-card,
 .chip-button,
 .dialog-button,
+/* Tool buttons pair a glyph with its label. */
 .column-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   transition:
     background-color var(--motion-fast) var(--ease-out),
     filter var(--motion-fast) var(--ease-out);
@@ -1156,7 +1268,12 @@
   display: none;
 }
 
+/* Tool buttons pair a glyph with its label. */
 .column-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   flex: 1;
   min-height: 44px;
   border-radius: var(--radius-md);
@@ -1479,4 +1596,13 @@
   color: var(--color-text-faint);
   flex-shrink: 0;
   margin-top: 3px;
+}
+
+.tree-icon {
+  flex-shrink: 0;
+  color: var(--color-text-faint);
+}
+
+.tree-row.selected .tree-icon {
+  color: var(--color-accent);
 }

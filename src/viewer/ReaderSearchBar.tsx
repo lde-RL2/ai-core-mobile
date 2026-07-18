@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
+import { Icon } from '../components/Icon'
 
 interface SearchMatch {
   page: number
@@ -91,7 +92,7 @@ export function ReaderSearchBar(props: ReaderSearchBarProps): React.JSX.Element 
           검색
         </button>
         <button className="icon-button" aria-label="검색 닫기" onClick={props.onClose}>
-          ✕
+          <Icon name="close" size={18} />
         </button>
       </div>
       {(matches !== null || searching) && (
