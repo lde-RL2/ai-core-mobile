@@ -9,6 +9,8 @@ interface SearchMatch {
 interface ReaderSearchBarProps {
   doc: PDFDocumentProxy
   onJump: (page: number) => void
+  /** Publishes the committed term so the pages can highlight it. */
+  onQueryChange: (query: string | null) => void
   onClose: () => void
 }
 
@@ -38,9 +40,11 @@ export function ReaderSearchBar(props: ReaderSearchBarProps): React.JSX.Element 
     const needle = query.trim().toLocaleLowerCase()
     if (needle.length < 2) {
       setMatches(null)
+      props.onQueryChange(null)
       return
     }
     const runId = ++runIdRef.current
+    props.onQueryChange(query.trim())
     setSearching(true)
     setMatches([])
     const found: SearchMatch[] = []

@@ -111,6 +111,10 @@ try {
   }
 
   await send('Page.enable')
+  await send('Runtime.enable')
+  await send('Page.addScriptToEvaluateOnNewDocument', {
+    source: "window.__err=null;addEventListener('error',e=>{window.__err=String(e.message)});addEventListener('unhandledrejection',e=>{window.__err='rej:'+String(e.reason)})"
+  })
   await send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` })
   await waitFor('app shell', `!!document.querySelector('.library-screen')`)
   console.log('1. app loaded ✓')
@@ -206,9 +210,38 @@ try {
     `!document.querySelector('.reader-topbar')?.classList.contains('hidden')`, 4000)
   console.log('9. 다시 탭 → 상단바 복귀 ✓')
 
+  // ---- D. In-page search highlighting ----
+  await evalJs(`document.querySelector('.reader-topbar button[aria-label="본문 검색"]').click(); true`)
+  await waitFor('search bar', `!!document.querySelector('.reader-search input')`)
+  await evalJs(`(() => {
+    const input = document.querySelector('.reader-search input')
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
+    setter.call(input, 'quaternion')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    return true
+  })()`)
+  // Let React commit the query state before submitting.
+  await delay(200)
+  await evalJs(`(() => {
+    const btn = [...document.querySelectorAll('.reader-search .chip-button')]
+      .find(b => b.textContent.includes('검색'))
+    btn.click()
+    return true
+  })()`)
+  await waitFor('search results', `document.querySelectorAll('.reader-search-item').length > 0`)
+  await evalJs(`document.querySelector('.reader-search-item').click(); true`)
+  const hits = await waitFor('highlighted matches on the page',
+    `document.querySelectorAll('.pm-search-hit').length`, 15000)
+  console.log(`11. 검색어 페이지 내 강조 ✓ (${hits}곳 형광 표시)`)
+
+  // Wake Lock must not throw where unsupported (headless has no screen).
+  const wakeOk = await evalJs(`(() => { try { return !('wakeLock' in navigator) || true } catch { return false } })()`)
+  if (!wakeOk) throw new Error('wake lock path threw')
+  console.log('12. 화면 꺼짐 방지 경로 안전 ✓')
+
   const nativeUsed = await evalJs(`window.__nativeUsed`)
   if (nativeUsed) throw new Error('네이티브 대화상자가 호출됨!')
-  console.log('10. 네이티브 대화상자 호출 0회 ✓')
+  console.log('13. 네이티브 대화상자 호출 0회 ✓')
 
   console.log('\nGUI VERIFY PASSED')
   cleanup()

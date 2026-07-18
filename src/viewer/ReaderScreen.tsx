@@ -7,6 +7,9 @@ import { PdfPage } from './PdfPage'
 import { selectionToPageRects, type PageSelection } from './selection'
 import { AnnotationEditSheet, AnnotationListSheet, SelectionToolbar } from './AnnotationSheets'
 import { ReaderSearchBar } from './ReaderSearchBar'
+import { OutlineSheet } from './OutlineSheet'
+import { destinationToPageNumber, flattenOutline, type OutlineEntry } from './pdfDest'
+import { detectColumns, type ColumnLayout } from './columnDetect'
 import { useDialogs } from '../components/Dialogs'
 
 const PAGE_GAP = 14
@@ -51,6 +54,13 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
   // Immersive reading: a single tap hides the top bar and scrubber so the page
   // gets the whole screen — the standard phone reader behaviour.
   const [chromeVisible, setChromeVisible] = useState(true)
+  const [searchQuery, setSearchQuery] = useState<string | null>(null)
+  const [returnScrollTop, setReturnScrollTop] = useState<number | null>(null)
+  const [outline, setOutline] = useState<OutlineEntry[]>([])
+  const [outlineOpen, setOutlineOpen] = useState(false)
+  const [columnLayout, setColumnLayout] = useState<ColumnLayout | null>(null)
+  const [columnMode, setColumnMode] = useState(false)
+  const [activeColumn, setActiveColumn] = useState(0)
   const dialogs = useDialogs()
 
   const contentRef = useRef<HTMLDivElement>(null)
@@ -100,6 +110,41 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
         }
         setDoc(pdf)
         setDims(pageDims)
+        // Infer the column layout from a few body pages. Papers are uniform, so
+        // the first page that reads as two columns settles it; page 1 alone is
+        // unreliable (title blocks and abstracts often span the full width).
+        void (async () => {
+          for (let i = 1; i <= Math.min(4, pdf.numPages); i += 1) {
+            try {
+              const page = await pdf.getPage(i)
+              if (cancelled) return
+              const content = await page.getTextContent()
+              const pageWidth = page.getViewport({ scale: 1 }).width
+              const spans = content.items.flatMap((item) =>
+                'width' in item && 'transform' in item
+                  ? [{ x: item.transform[4] as number, width: item.width }]
+                  : []
+              )
+              const layout = detectColumns(spans, pageWidth)
+              if (layout.columns.length > 1) {
+                if (!cancelled) setColumnLayout(layout)
+                return
+              }
+            } catch {
+              // Skip an unreadable page; the reader stays single-column.
+            }
+          }
+        })()
+
+        // Section bookmarks, when the publisher embedded them.
+        void pdf
+          .getOutline()
+          .then((nodes) => {
+            if (!cancelled && nodes?.length) setOutline(flattenOutline(nodes))
+          })
+          .catch(() => {
+            // A malformed outline just means no section navigation.
+          })
         // Papers pulled from sync arrive without a page count; backfill the
         // local-only field without marking the paper dirty.
         if (paper.pageCount === null) {
@@ -116,6 +161,36 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
       void loadedDoc?.destroy().catch(() => {})
     }
   }, [paper.id])
+
+  // Keep the screen awake while reading — a long page can otherwise dim and
+  // lock mid-paragraph. The lock is dropped by the OS whenever the tab is
+  // backgrounded, so re-acquire it when we come back.
+  useEffect(() => {
+    const wakeLock = navigator.wakeLock
+    if (!wakeLock) return
+    let sentinel: WakeLockSentinel | null = null
+    let disposed = false
+
+    const acquire = async (): Promise<void> => {
+      if (disposed || document.visibilityState !== 'visible') return
+      try {
+        sentinel = await wakeLock.request('screen')
+      } catch {
+        // Denied or unsupported (e.g. low battery) — reading still works.
+      }
+    }
+    void acquire()
+
+    const onVisibility = (): void => {
+      if (document.visibilityState === 'visible') void acquire()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      disposed = true
+      document.removeEventListener('visibilitychange', onVisibility)
+      void sentinel?.release().catch(() => {})
+    }
+  }, [])
 
   // Persist reading position on unmount.
   const refreshRef = useRef(props.refresh)
@@ -454,6 +529,89 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
     [scrollEl]
   )
 
+  /** Zoom so one column fills the screen and pin the horizontal scroll to it.
+   *  `atPage` starts the column at that page's top; otherwise the current
+   *  vertical position is kept (scaled to the new zoom). */
+  const goToColumn = useCallback(
+    (index: number, atPage?: number) => {
+      const columns = columnLayout?.columns
+      const currentLayout = layoutRef.current
+      if (!columns || !scrollEl || !currentLayout) return
+      const column = columns[index]
+      if (!column) return
+      const width = Math.max(0.05, column.end - column.start)
+      const target = clamp(1 / width, MIN_ZOOM, MAX_ZOOM)
+      const ratio = target / zoomRef.current
+      const nextPageWidth = Math.max(1, (containerWidth - SIDE_PADDING * 2) * target)
+      pendingScrollRef.current = {
+        left: column.start * nextPageWidth,
+        top:
+          atPage !== undefined
+            ? currentLayout.tops[clamp(atPage, 1, currentLayout.tops.length) - 1] * ratio
+            : scrollEl.scrollTop * ratio
+      }
+      setActiveColumn(index)
+      setZoom(target)
+    },
+    [columnLayout, scrollEl, containerWidth]
+  )
+
+  const toggleColumnMode = useCallback(() => {
+    if (columnMode) {
+      setColumnMode(false)
+      setZoomAnchoredAtCenter(1)
+      return
+    }
+    setColumnMode(true)
+    goToColumn(0, currentPage)
+  }, [columnMode, goToColumn, currentPage, setZoomAnchoredAtCenter])
+
+  /** Reading order is p1c1 → p1c2 → p2c1 …, which a plain vertical scroll
+   *  cannot express, so advancing is an explicit step. */
+  const advanceColumn = useCallback(() => {
+    const total = columnLayout?.columns.length ?? 1
+    if (activeColumn + 1 < total) goToColumn(activeColumn + 1, currentPage)
+    else goToColumn(0, currentPage + 1)
+  }, [activeColumn, columnLayout, goToColumn, currentPage])
+
+  const retreatColumn = useCallback(() => {
+    if (activeColumn > 0) goToColumn(activeColumn - 1, currentPage)
+    else goToColumn((columnLayout?.columns.length ?? 1) - 1, Math.max(1, currentPage - 1))
+  }, [activeColumn, columnLayout, goToColumn, currentPage])
+
+  // Following a citation should be a round trip: remember exactly where the
+  // reader was so "돌아가기" lands back on the sentence being read.
+  const followDestination = useCallback(
+    async (dest: string | unknown[]) => {
+      if (!doc || !scrollEl) return
+      const pageNumber = await destinationToPageNumber(doc, dest)
+      if (!pageNumber) return
+      setReturnScrollTop(scrollEl.scrollTop)
+      jumpToPage(pageNumber)
+    },
+    [doc, scrollEl, jumpToPage]
+  )
+
+  const goBackFromLink = useCallback(() => {
+    if (!scrollEl || returnScrollTop === null) return
+    scrollEl.scrollTop = returnScrollTop
+    setReturnScrollTop(null)
+  }, [scrollEl, returnScrollTop])
+
+  const jumpToOutlineEntry = useCallback(
+    async (entry: OutlineEntry) => {
+      setOutlineOpen(false)
+      if (entry.url) {
+        window.open(entry.url, '_blank', 'noopener,noreferrer')
+        return
+      }
+      if (!doc) return
+      const pageNumber = await destinationToPageNumber(doc, entry.dest)
+      if (pageNumber) jumpToPage(pageNumber)
+    },
+    [doc, jumpToPage]
+  )
+
   const promptPageJump = useCallback(async () => {
     if (!dims) return
     const raw = await dialogs.prompt({
@@ -510,6 +668,21 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
         >
           🔍
         </button>
+        {columnLayout && columnLayout.columns.length > 1 && (
+          <button
+            className={columnMode ? 'icon-button active' : 'icon-button'}
+            aria-label={columnMode ? '단 모드 끄기' : '단 모드 켜기'}
+            aria-pressed={columnMode}
+            onClick={toggleColumnMode}
+          >
+            ▥
+          </button>
+        )}
+        {outline.length > 0 && (
+          <button className="icon-button" aria-label="목차" onClick={() => setOutlineOpen(true)}>
+            ☰
+          </button>
+        )}
         <button className="icon-button" aria-label="주석 목록" onClick={() => setListOpen(true)}>
           📑
         </button>
@@ -519,7 +692,11 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
         <ReaderSearchBar
           doc={doc}
           onJump={(pageNumber) => jumpToPage(pageNumber)}
-          onClose={() => setSearchOpen(false)}
+          onQueryChange={setSearchQuery}
+          onClose={() => {
+            setSearchOpen(false)
+            setSearchQuery(null)
+          }}
         />
       )}
 
@@ -561,12 +738,34 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
                   scrollRoot={scrollEl}
                   annotations={annotationsByPage.get(index + 1) ?? EMPTY_ANNOTATIONS}
                   onTapAnnotation={setEditing}
+                  searchQuery={searchQuery}
+                  onFollowDestination={(dest) => void followDestination(dest)}
                 />
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {returnScrollTop !== null && (
+        <button className="reader-return-chip" onClick={goBackFromLink}>
+          ↩ 읽던 곳으로
+        </button>
+      )}
+
+      {columnMode && columnLayout && (
+        <div className={chromeVisible ? 'reader-column-bar' : 'reader-column-bar hidden'}>
+          <button className="column-step" onClick={retreatColumn}>
+            ◀ 이전 단
+          </button>
+          <span className="column-indicator">
+            {activeColumn + 1} / {columnLayout.columns.length} 단
+          </span>
+          <button className="column-step primary" onClick={advanceColumn}>
+            다음 단 ▶
+          </button>
+        </div>
+      )}
 
       {dims && dims.length > 1 && (
         <div className={chromeVisible ? 'reader-scrubber' : 'reader-scrubber hidden'}>
@@ -600,6 +799,14 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
           onSave={(update) => void saveAnnotationEdit(update)}
           onDelete={() => void deleteEditingAnnotation()}
           onClose={() => setEditing(null)}
+        />
+      )}
+
+      {outlineOpen && (
+        <OutlineSheet
+          entries={outline}
+          onJump={(entry) => void jumpToOutlineEntry(entry)}
+          onClose={() => setOutlineOpen(false)}
         />
       )}
 

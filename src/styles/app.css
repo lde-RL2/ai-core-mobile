@@ -883,6 +883,158 @@
   background: var(--color-bg-soft);
 }
 
+/* Tappable link annotations (citations, DOI/arXiv URLs, cross-references).
+   Invisible until pressed so the page still looks like the paper. */
+.pm-link-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+}
+
+.pm-link {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  cursor: pointer;
+  /* Keeps hairline citation boxes reachable with a fingertip. */
+  min-width: 12px;
+  min-height: 12px;
+}
+
+.pm-link:active {
+  background: color-mix(in srgb, var(--color-accent) 32%, transparent);
+}
+
+.reader-return-chip {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(64px + var(--safe-bottom));
+  z-index: 40;
+  padding: 10px 16px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: var(--shadow-float);
+}
+
+/* In-page search hits. Sits under the annotation layer so a highlight the user
+   made stays visually dominant, and never intercepts taps. */
+.pm-search-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.pm-search-hit {
+  position: absolute;
+  background: color-mix(in srgb, #ffb300 55%, transparent);
+  border-radius: 2px;
+  mix-blend-mode: multiply;
+}
+
+:root[data-theme='dark'] .pm-search-hit {
+  mix-blend-mode: screen;
+  background: color-mix(in srgb, #ffb300 42%, transparent);
+}
+
+.outline-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.outline-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+}
+
+.outline-item:active {
+  background: var(--color-bg-hover);
+}
+
+.outline-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--color-text-muted);
+}
+
+.outline-title.top {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.outline-external {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.icon-button.active {
+  background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+  color: var(--color-accent);
+}
+
+/* Column-mode stepper. Reading order across a two-column paper is
+   p1c1 → p1c2 → p2c1, which a vertical scroll cannot express on its own. */
+.reader-column-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px calc(12px + var(--safe-right)) 6px calc(12px + var(--safe-left));
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+  flex-shrink: 0;
+  transition: opacity 140ms ease;
+}
+
+.reader-column-bar.hidden {
+  display: none;
+}
+
+.column-step {
+  flex: 1;
+  min-height: 44px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-bg-soft);
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.column-step.primary {
+  border-color: transparent;
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
+.column-step:active {
+  filter: brightness(0.94);
+}
+
+.column-indicator {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
 .reader-scrubber {
   display: flex;
   align-items: center;
