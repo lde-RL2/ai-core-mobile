@@ -245,8 +245,9 @@
 }
 
 .icon-button.small {
-  min-width: 30px;
-  min-height: 30px;
+  /* 44px is the Apple HIG minimum touch target; the glyph stays small. */
+  min-width: 44px;
+  min-height: 44px;
   font-size: 14px;
   color: var(--color-text-muted);
 }
@@ -568,6 +569,94 @@
   justify-content: center;
 }
 
+/* In-app confirm/prompt (replaces window.confirm / window.prompt). Sits above
+   every other sheet so it can confirm an action started inside one. */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgb(0 0 0 / 45%);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 0 env(safe-area-inset-bottom, 0px);
+}
+
+.dialog-sheet {
+  width: min(520px, 100%);
+  background: var(--color-bg-elevated);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: var(--shadow-float);
+  padding: 20px 18px calc(16px + var(--safe-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+@media (min-width: 640px) {
+  .dialog-backdrop {
+    align-items: center;
+  }
+
+  .dialog-sheet {
+    border-radius: var(--radius-lg);
+    padding-bottom: 16px;
+  }
+}
+
+.dialog-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.dialog-message {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+  white-space: pre-line;
+}
+
+.dialog-input {
+  margin-top: 4px;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.dialog-button {
+  flex: 1;
+  min-height: 48px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-bg-soft);
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.dialog-button.primary {
+  border-color: transparent;
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
+.dialog-button.primary.danger {
+  background: var(--color-danger);
+}
+
+.dialog-button:disabled {
+  opacity: 0.5;
+}
+
+.dialog-button:active {
+  filter: brightness(0.94);
+}
+
 .sheet {
   width: min(680px, 100%);
   max-height: 82dvh;
@@ -773,6 +862,18 @@
   white-space: nowrap;
 }
 
+/* Immersive reading: the bar collapses out of the way instead of unmounting,
+   so the scroll area keeps its position and the transition stays smooth. */
+.reader-topbar {
+  transition: margin-top 180ms ease, opacity 140ms ease;
+}
+
+.reader-topbar.hidden {
+  margin-top: calc(-1 * (var(--safe-top) + 52px));
+  opacity: 0;
+  pointer-events: none;
+}
+
 .reader-scroll {
   flex: 1;
   min-height: 0;
@@ -780,6 +881,41 @@
   touch-action: pan-x pan-y;
   overscroll-behavior: none;
   background: var(--color-bg-soft);
+}
+
+.reader-scrubber {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px calc(14px + var(--safe-right)) calc(8px + var(--safe-bottom))
+    calc(14px + var(--safe-left));
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+  flex-shrink: 0;
+  transition: margin-bottom 180ms ease, opacity 140ms ease;
+}
+
+.reader-scrubber.hidden {
+  margin-bottom: calc(-1 * (var(--safe-bottom) + 48px));
+  opacity: 0;
+  pointer-events: none;
+}
+
+.reader-scrubber-range {
+  flex: 1;
+  min-width: 0;
+  /* A comfortably grabbable thumb: the default track is far too thin to hit
+     reliably with a thumb on a phone. */
+  height: 32px;
+  accent-color: var(--color-accent);
+  background: transparent;
+}
+
+.reader-scrubber-label {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+  white-space: nowrap;
 }
 
 .reader-content {

@@ -14,9 +14,10 @@
     "icons": "node scripts/generate-icons.mjs",
     "preview": "vite preview --host",
     "test:e2e": "node scripts/e2e-smoke.mjs",
-    "check": "npm run build && npm test && npm run test:e2e",
+    "check": "npm run build && npm test && npm run test:e2e && npm run test:gui",
     "apk": "bash scripts/build-apk.sh",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "tsx --test tests/*.test.ts",
+    "test:gui": "node scripts/e2e-gui.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { Collection, Tag } from '../types'
 import * as db from '../storage/db'
+import { useDialogs } from './Dialogs'
 
 interface CollectionsPaneProps {
   collections: Collection[]
@@ -32,6 +33,7 @@ function buildTree(collections: Collection[]): TreeNode[] {
 export function CollectionsPane(props: CollectionsPaneProps): React.JSX.Element {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const tree = useMemo(() => buildTree(props.collections), [props.collections])
+  const dialogs = useDialogs()
 
   function toggleCollapsed(id: string): void {
     setCollapsed((prev) => {
@@ -43,37 +45,59 @@ export function CollectionsPane(props: CollectionsPaneProps): React.JSX.Element 
   }
 
   async function createCollection(parentId: string | null): Promise<void> {
-    const name = window.prompt('새 컬렉션 이름')?.trim()
+    const name = await dialogs.prompt({
+      title: '새 컬렉션',
+      placeholder: '컬렉션 이름',
+      confirmLabel: '만들기'
+    })
     if (!name) return
     await db.createCollection(name, parentId)
     props.refresh()
   }
 
   async function renameCollection(collection: Collection): Promise<void> {
-    const name = window.prompt('컬렉션 이름 변경', collection.name)?.trim()
+    const name = await dialogs.prompt({
+      title: '컬렉션 이름 변경',
+      defaultValue: collection.name,
+      confirmLabel: '저장'
+    })
     if (!name || name === collection.name) return
     await db.renameCollection(collection.id, name)
     props.refresh()
   }
 
   async function deleteCollection(collection: Collection): Promise<void> {
-    if (!window.confirm(`"${collection.name}" 컬렉션을 삭제할까요?\n하위 컬렉션도 함께 삭제됩니다. (논문 파일은 남습니다)`)) {
-      return
-    }
+    const ok = await dialogs.confirm({
+      title: `"${collection.name}" 컬렉션을 삭제할까요?`,
+      message: '하위 컬렉션도 함께 삭제됩니다. 논문 파일은 남습니다.',
+      confirmLabel: '삭제',
+      danger: true
+    })
+    if (!ok) return
     await db.deleteCollection(collection.id)
     if (props.selectedCollectionId === collection.id) props.onSelectCollection(null)
     props.refresh()
   }
 
   async function createTag(): Promise<void> {
-    const name = window.prompt('새 태그 이름')?.trim()
+    const name = await dialogs.prompt({
+      title: '새 태그',
+      placeholder: '태그 이름',
+      confirmLabel: '만들기'
+    })
     if (!name) return
     await db.createTag(name)
     props.refresh()
   }
 
   async function deleteTag(tag: Tag): Promise<void> {
-    if (!window.confirm(`태그 #${tag.name}을(를) 삭제할까요?`)) return
+    const ok = await dialogs.confirm({
+      title: `태그 #${tag.name}을(를) 삭제할까요?`,
+      message: '이 태그가 달린 논문은 그대로 남습니다.',
+      confirmLabel: '삭제',
+      danger: true
+    })
+    if (!ok) return
     await db.deleteTag(tag.id)
     if (props.selectedTagId === tag.id) props.onSelectTag(null)
     props.refresh()

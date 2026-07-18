@@ -7,6 +7,7 @@ import { PdfPage } from './PdfPage'
 import { selectionToPageRects, type PageSelection } from './selection'
 import { AnnotationEditSheet, AnnotationListSheet, SelectionToolbar } from './AnnotationSheets'
 import { ReaderSearchBar } from './ReaderSearchBar'
+import { useDialogs } from '../components/Dialogs'
 
 const PAGE_GAP = 14
 const SIDE_PADDING = 8
@@ -47,6 +48,10 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
   const [listOpen, setListOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null)
+  // Immersive reading: a single tap hides the top bar and scrubber so the page
+  // gets the whole screen — the standard phone reader behaviour.
+  const [chromeVisible, setChromeVisible] = useState(true)
+  const dialogs = useDialogs()
 
   const contentRef = useRef<HTMLDivElement>(null)
   const zoomRef = useRef(zoom)
@@ -212,11 +217,12 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
       ratio: number
     } | null = null
 
-    // Single-finger tap tracking, used only to detect a double-tap.
+    // Single-finger tap tracking: one tap toggles the chrome, two zoom.
     let tapStart: { x: number; y: number; t: number } | null = null
     let lastTapTime = 0
     let lastTapX = 0
     let lastTapY = 0
+    let singleTapTimer: number | null = null
 
     const onTouchStart = (e: TouchEvent): void => {
       if (e.touches.length === 1) {
@@ -225,6 +231,10 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
       }
       if (e.touches.length !== 2) return
       tapStart = null
+      if (singleTapTimer !== null) {
+        window.clearTimeout(singleTapTimer)
+        singleTapTimer = null
+      }
       const [a, b] = [e.touches[0], e.touches[1]]
       const rect = scrollEl.getBoundingClientRect()
       pinch = {
@@ -238,7 +248,7 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
       }
     }
 
-    const handleDoubleTap = (e: TouchEvent): void => {
+    const handleTap = (e: TouchEvent): void => {
       const start = tapStart
       tapStart = null
       if (!start || e.touches.length > 0) return
@@ -248,9 +258,17 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
       // press for text selection).
       if (Math.hypot(t.clientX - start.x, t.clientY - start.y) > 12) return
       if (Date.now() - start.t > 250) return
+      // Tapping an annotation opens its editor; never treat that as a page tap.
+      if ((e.target as Element | null)?.closest?.('.pm-annotation')) return
+      // A tap that dismisses an active text selection shouldn't also toggle.
+      if (!document.getSelection()?.isCollapsed) return
+
       const now = Date.now()
       const near = Math.hypot(t.clientX - lastTapX, t.clientY - lastTapY) < 40
       if (now - lastTapTime < 300 && near) {
+        // Second tap: cancel the pending chrome toggle and zoom instead.
+        if (singleTapTimer !== null) window.clearTimeout(singleTapTimer)
+        singleTapTimer = null
         lastTapTime = 0
         const rect = scrollEl.getBoundingClientRect()
         const px = t.clientX - rect.left
@@ -262,11 +280,19 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
           top: (scrollEl.scrollTop + py) * ratio - py
         }
         setZoom(target)
-      } else {
-        lastTapTime = now
-        lastTapX = t.clientX
-        lastTapY = t.clientY
+        return
       }
+
+      lastTapTime = now
+      lastTapX = t.clientX
+      lastTapY = t.clientY
+      // Wait out the double-tap window before toggling, so a double-tap to
+      // zoom doesn't flash the chrome.
+      if (singleTapTimer !== null) window.clearTimeout(singleTapTimer)
+      singleTapTimer = window.setTimeout(() => {
+        singleTapTimer = null
+        setChromeVisible((visible) => !visible)
+      }, 300)
     }
 
     const onTouchMove = (e: TouchEvent): void => {
@@ -290,7 +316,7 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
 
     const onTouchEnd = (e: TouchEvent): void => {
       if (!pinch) {
-        handleDoubleTap(e)
+        handleTap(e)
         return
       }
       if (e.touches.length >= 2) return
@@ -311,6 +337,7 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
     scrollEl.addEventListener('touchend', onTouchEnd)
     scrollEl.addEventListener('touchcancel', onTouchEnd)
     return () => {
+      if (singleTapTimer !== null) window.clearTimeout(singleTapTimer)
       scrollEl.removeEventListener('touchstart', onTouchStart)
       scrollEl.removeEventListener('touchmove', onTouchMove)
       scrollEl.removeEventListener('touchend', onTouchEnd)
@@ -427,12 +454,18 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
     [scrollEl]
   )
 
-  const promptPageJump = useCallback(() => {
+  const promptPageJump = useCallback(async () => {
     if (!dims) return
-    const raw = window.prompt(`페이지 이동 (1–${dims.length})`, String(currentPage))
+    const raw = await dialogs.prompt({
+      title: '페이지 이동',
+      message: `1 – ${dims.length} 사이의 페이지 번호`,
+      defaultValue: String(currentPage),
+      confirmLabel: '이동',
+      numericRange: { min: 1, max: dims.length }
+    })
     const pageNumber = raw ? Number.parseInt(raw, 10) : NaN
     if (Number.isFinite(pageNumber)) jumpToPage(pageNumber)
-  }, [dims, currentPage, jumpToPage])
+  }, [dims, currentPage, jumpToPage, dialogs])
 
   // ---------- render ----------
 
@@ -448,12 +481,12 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
 
   return (
     <div className="reader">
-      <header className="reader-topbar">
+      <header className={chromeVisible ? 'reader-topbar' : 'reader-topbar hidden'}>
         <button className="icon-button" aria-label="뒤로" onClick={props.onClose}>
           ‹
         </button>
         <span className="reader-title">{paper.title}</span>
-        <button className="reader-page-indicator" onClick={promptPageJump}>
+        <button className="reader-page-indicator" onClick={() => void promptPageJump()}>
           {currentPage} / {dims?.length ?? paper.pageCount ?? '–'}
         </button>
         <button
@@ -534,6 +567,23 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
           </div>
         )}
       </div>
+
+      {dims && dims.length > 1 && (
+        <div className={chromeVisible ? 'reader-scrubber' : 'reader-scrubber hidden'}>
+          <input
+            className="reader-scrubber-range"
+            type="range"
+            min={1}
+            max={dims.length}
+            value={currentPage}
+            aria-label="페이지 이동 슬라이더"
+            onChange={(e) => jumpToPage(Number(e.target.value))}
+          />
+          <span className="reader-scrubber-label">
+            {currentPage} / {dims.length}
+          </span>
+        </div>
+      )}
 
       {selection && !editing && (
         <SelectionToolbar

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Collection, Paper, Tag } from '../types'
 import * as db from '../storage/db'
+import { useDialogs } from './Dialogs'
 
 interface PaperDetailSheetProps {
   paper: Paper
@@ -18,6 +19,7 @@ export function PaperDetailSheet(props: PaperDetailSheetProps): React.JSX.Elemen
   const [tagIds, setTagIds] = useState<string[]>([])
   const [collectionIds, setCollectionIds] = useState<string[]>([])
   const [newTag, setNewTag] = useState('')
+  const dialogs = useDialogs()
 
   useEffect(() => {
     let cancelled = false
@@ -78,7 +80,13 @@ export function PaperDetailSheet(props: PaperDetailSheetProps): React.JSX.Elemen
   }
 
   async function deletePaper(): Promise<void> {
-    if (!window.confirm(`"${paper.title}"을(를) 삭제할까요?\nPDF와 주석이 모두 삭제됩니다.`)) return
+    const ok = await dialogs.confirm({
+      title: `"${paper.title}"을(를) 삭제할까요?`,
+      message: 'PDF와 주석이 모두 삭제됩니다.',
+      confirmLabel: '삭제',
+      danger: true
+    })
+    if (!ok) return
     await db.deletePaper(paper.id)
     props.refresh()
     props.onClose()

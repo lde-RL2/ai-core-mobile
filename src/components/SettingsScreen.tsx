@@ -6,6 +6,7 @@ import { markAllLocalDirty } from '../sync/engine'
 import { driveSignOut } from '../sync/driveAuth'
 import { resetSyncState } from '../sync/state'
 import { SyncSettings } from './SyncSettings'
+import { useDialogs } from './Dialogs'
 
 interface SettingsScreenProps {
   theme: ThemeMode
@@ -41,6 +42,7 @@ export function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
   const [busy, setBusy] = useState<string | null>(null)
   const [backupMessage, setBackupMessage] = useState<string | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
+  const dialogs = useDialogs()
 
   useEffect(() => {
     void estimateStorage().then(setStorage)
@@ -70,15 +72,22 @@ export function SettingsScreen(props: SettingsScreenProps): React.JSX.Element {
   }
 
   async function handleReset(): Promise<void> {
-    if (
-      !window.confirm(
-        '이 기기의 모든 논문, 주석, 컬렉션, 동기화 설정을 삭제할까요?\n' +
-          'Drive/Notion에 동기화된 원격 데이터는 지우지 않습니다.'
-      )
-    ) {
-      return
-    }
-    if (!window.confirm('정말 삭제할까요? 백업하지 않은 데이터는 되돌릴 수 없습니다.')) return
+    const ok = await dialogs.confirm({
+      title: '이 기기의 데이터를 모두 삭제할까요?',
+      message:
+        '논문, 주석, 컬렉션, 동기화 설정이 지워집니다.\n' +
+        'Drive/Notion에 동기화된 원격 데이터는 지우지 않습니다.',
+      confirmLabel: '계속',
+      danger: true
+    })
+    if (!ok) return
+    const confirmed = await dialogs.confirm({
+      title: '정말 삭제할까요?',
+      message: '백업하지 않은 데이터는 되돌릴 수 없습니다.',
+      confirmLabel: '삭제',
+      danger: true
+    })
+    if (!confirmed) return
     setBusy('초기화 중…')
     try {
       await driveSignOut().catch(() => {})
