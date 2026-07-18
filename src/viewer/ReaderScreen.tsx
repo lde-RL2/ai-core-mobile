@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
-import type { Annotation, AnnotationType, Paper } from '../types'
+import { ANNOTATION_COLORS, type Annotation, type AnnotationType, type Paper } from '../types'
 import * as db from '../storage/db'
 import { loadPdf } from '../pdf/pdfjs'
-import { PdfPage } from './PdfPage'
+import { PdfPage, type PlacementTool } from './PdfPage'
 import { selectionToPageRects, type PageSelection } from './selection'
 import { AnnotationEditSheet, AnnotationListSheet, SelectionToolbar } from './AnnotationSheets'
 import { ReaderSearchBar } from './ReaderSearchBar'
@@ -58,6 +58,9 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
   const [returnScrollTop, setReturnScrollTop] = useState<number | null>(null)
   const [outline, setOutline] = useState<OutlineEntry[]>([])
   const [outlineOpen, setOutlineOpen] = useState(false)
+  const [tool, setTool] = useState<PlacementTool>('none')
+  const [textless, setTextless] = useState(false)
+  const [scanNoticeDismissed, setScanNoticeDismissed] = useState(false)
   const [columnLayout, setColumnLayout] = useState<ColumnLayout | null>(null)
   const [columnMode, setColumnMode] = useState(false)
   const [activeColumn, setActiveColumn] = useState(0)
@@ -114,26 +117,33 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
         // the first page that reads as two columns settles it; page 1 alone is
         // unreliable (title blocks and abstracts often span the full width).
         void (async () => {
+          let found: ColumnLayout | null = null
+          let textItems = 0
           for (let i = 1; i <= Math.min(4, pdf.numPages); i += 1) {
             try {
               const page = await pdf.getPage(i)
               if (cancelled) return
               const content = await page.getTextContent()
-              const pageWidth = page.getViewport({ scale: 1 }).width
-              const spans = content.items.flatMap((item) =>
-                'width' in item && 'transform' in item
-                  ? [{ x: item.transform[4] as number, width: item.width }]
-                  : []
-              )
-              const layout = detectColumns(spans, pageWidth)
-              if (layout.columns.length > 1) {
-                if (!cancelled) setColumnLayout(layout)
-                return
+              textItems += content.items.length
+              if (!found) {
+                const pageWidth = page.getViewport({ scale: 1 }).width
+                const spans = content.items.flatMap((item) =>
+                  'width' in item && 'transform' in item
+                    ? [{ x: item.transform[4] as number, width: item.width }]
+                    : []
+                )
+                const layout = detectColumns(spans, pageWidth)
+                if (layout.columns.length > 1) found = layout
               }
             } catch {
               // Skip an unreadable page; the reader stays single-column.
             }
           }
+          if (cancelled) return
+          if (found) setColumnLayout(found)
+          // Practically no extractable text means an image-only scan, where
+          // selection, search and column detection can never work.
+          setTextless(textItems < 8)
         })()
 
         // Section bookmarks, when the publisher embedded them.
@@ -487,6 +497,31 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
     [selection, annotType, paper.id]
   )
 
+  /** Place a note or area annotation without needing a text selection — the
+   *  only way to annotate a scanned paper, and handy for figures. */
+  const placeAnnotation = useCallback(
+    async (pageNumber: number, type: 'note' | 'area', rect: Annotation['rects'][number]) => {
+      const annotation: Annotation = {
+        id: crypto.randomUUID(),
+        paperId: paper.id,
+        pageNumber,
+        type,
+        rects: [rect],
+        color: ANNOTATION_COLORS[0],
+        note: null,
+        text: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: Date.now()
+      }
+      await db.putAnnotation(annotation)
+      setAnnotations((prev) => [...prev, annotation])
+      setTool('none')
+      // Notes exist to carry a memo, so go straight to typing it.
+      if (type === 'note') setEditing(annotation)
+    },
+    [paper.id]
+  )
+
   const copySelection = useCallback(async () => {
     if (!selection) return
     try {
@@ -683,10 +718,54 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
             ☰
           </button>
         )}
+        <button
+          className={tool !== 'none' ? 'icon-button active' : 'icon-button'}
+          aria-label="주석 도구"
+          aria-pressed={tool !== 'none'}
+          onClick={() => setTool((current) => (current === 'none' ? 'note' : 'none'))}
+        >
+          📝
+        </button>
         <button className="icon-button" aria-label="주석 목록" onClick={() => setListOpen(true)}>
           📑
         </button>
       </header>
+
+      {textless && !scanNoticeDismissed && (
+        <div className="reader-notice">
+          <span>
+            스캔된 이미지 PDF입니다. 텍스트 선택·검색은 되지 않지만, 📝 도구로 메모와 영역
+            표시는 할 수 있습니다.
+          </span>
+          <button
+            className="icon-button small"
+            aria-label="안내 닫기"
+            onClick={() => setScanNoticeDismissed(true)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {tool !== 'none' && (
+        <div className="reader-tool-bar">
+          <button
+            className={tool === 'note' ? 'column-step primary' : 'column-step'}
+            onClick={() => setTool('note')}
+          >
+            📌 메모 찍기
+          </button>
+          <button
+            className={tool === 'area' ? 'column-step primary' : 'column-step'}
+            onClick={() => setTool('area')}
+          >
+            ⬚ 영역 표시
+          </button>
+          <button className="column-step" onClick={() => setTool('none')}>
+            취소
+          </button>
+        </div>
+      )}
 
       {searchOpen && doc && (
         <ReaderSearchBar
@@ -740,6 +819,10 @@ export function ReaderScreen(props: ReaderScreenProps): React.JSX.Element {
                   onTapAnnotation={setEditing}
                   searchQuery={searchQuery}
                   onFollowDestination={(dest) => void followDestination(dest)}
+                  tool={tool}
+                  onPlaceAnnotation={(page, type, rect) =>
+                    void placeAnnotation(page, type, rect)
+                  }
                 />
               </div>
             ))}

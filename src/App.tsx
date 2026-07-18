@@ -9,6 +9,7 @@ import { SettingsScreen } from './components/SettingsScreen'
 import { BottomNav } from './components/BottomNav'
 import { PaperDetailSheet } from './components/PaperDetailSheet'
 import { ReaderScreen } from './viewer/ReaderScreen'
+import { findResumePaper, isPaperSort, sortPapers, type PaperSort } from './sortPapers'
 
 type Tab = 'library' | 'collections' | 'settings'
 
@@ -55,6 +56,14 @@ export default function App(): React.JSX.Element {
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null)
   const [collectionPaperIds, setCollectionPaperIds] = useState<Set<string> | null>(null)
   const [search, setSearch] = useState('')
+  const [sort, setSort] = useState<PaperSort>(() => {
+    const stored = localStorage.getItem('aicore.sort')
+    return isPaperSort(stored) ? stored : 'added'
+  })
+
+  useEffect(() => {
+    localStorage.setItem('aicore.sort', sort)
+  }, [sort])
 
   const [openPaperId, setOpenPaperId] = useState<string | null>(null)
   const [detailPaperId, setDetailPaperId] = useState<string | null>(null)
@@ -194,7 +203,7 @@ export default function App(): React.JSX.Element {
 
   const filteredPapers = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase()
-    return papers.filter((paper) => {
+    const matched = papers.filter((paper) => {
       if (collectionPaperIds && !collectionPaperIds.has(paper.id)) return false
       if (selectedTagId && !(tagIdsByPaper.get(paper.id) ?? []).includes(selectedTagId)) {
         return false
@@ -204,7 +213,15 @@ export default function App(): React.JSX.Element {
         .toLocaleLowerCase()
       return haystack.includes(needle)
     })
-  }, [papers, collectionPaperIds, selectedTagId, tagIdsByPaper, search])
+    return sortPapers(matched, sort, readingByPaper)
+  }, [papers, collectionPaperIds, selectedTagId, tagIdsByPaper, search, sort, readingByPaper])
+
+  // Only offered on the unfiltered library, where it reads as "pick up where
+  // you left off" rather than an odd extra row inside a filtered result.
+  const resumePaper = useMemo(() => {
+    if (search.trim() || selectedCollectionId || selectedTagId) return null
+    return findResumePaper(papers, readingByPaper)
+  }, [papers, readingByPaper, search, selectedCollectionId, selectedTagId])
 
   const filterLabel = useMemo(() => {
     if (selectedCollectionId) {
@@ -241,6 +258,9 @@ export default function App(): React.JSX.Element {
       onClearFilter={() => selectCollection(null)}
       search={search}
       setSearch={setSearch}
+      sort={sort}
+      setSort={setSort}
+      resumePaper={resumePaper}
       tagIdsByPaper={tagIdsByPaper}
       tagsById={tagsById}
       readingByPaper={readingByPaper}

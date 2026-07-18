@@ -16,7 +16,15 @@ interface PdfPageProps {
   searchQuery: string | null
   /** Tapped a link annotation pointing inside the document. */
   onFollowDestination: (dest: string | unknown[]) => void
+  /** Active placement tool; 'none' leaves scrolling and selection untouched. */
+  tool: PlacementTool
+  onPlaceAnnotation: (pageNumber: number, type: 'note' | 'area', rect: NormalizedRect) => void
 }
+
+export type PlacementTool = 'none' | 'note' | 'area'
+
+/** Footprint of a placed sticky note, as a fraction of the page. */
+const NOTE_SIZE = { w: 0.05, h: 0.035 }
 
 interface PageLink {
   rect: NormalizedRect
@@ -35,6 +43,8 @@ function PdfPageImpl(props: PdfPageProps): React.JSX.Element {
   const [textRendered, setTextRendered] = useState(0)
   const [matchRects, setMatchRects] = useState<NormalizedRect[]>([])
   const [links, setLinks] = useState<PageLink[]>([])
+  const [draft, setDraft] = useState<NormalizedRect | null>(null)
+  const dragRef = useRef<{ x: number; y: number } | null>(null)
 
   useEffect(() => {
     const el = containerRef.current
@@ -154,6 +164,75 @@ function PdfPageImpl(props: PdfPageProps): React.JSX.Element {
     setMatchRects(findMatchRects(textDiv, props.searchQuery, cssWidth, cssHeight))
   }, [props.searchQuery, visible, textRendered, cssWidth, cssHeight])
 
+  const pointOnPage = (event: React.PointerEvent): { x: number; y: number } | null => {
+    const box = containerRef.current?.getBoundingClientRect()
+    if (!box || box.width === 0 || box.height === 0) return null
+    return {
+      x: Math.min(1, Math.max(0, (event.clientX - box.left) / box.width)),
+      y: Math.min(1, Math.max(0, (event.clientY - box.top) / box.height))
+    }
+  }
+
+  const captureHandlers =
+    props.tool === 'none'
+      ? null
+      : {
+          onPointerDown: (event: React.PointerEvent) => {
+            const point = pointOnPage(event)
+            if (!point) return
+            dragRef.current = point
+            if (props.tool === 'area') {
+              event.currentTarget.setPointerCapture(event.pointerId)
+              setDraft({ x: point.x, y: point.y, w: 0, h: 0 })
+            }
+          },
+          onPointerMove: (event: React.PointerEvent) => {
+            if (props.tool !== 'area' || !dragRef.current) return
+            const point = pointOnPage(event)
+            if (!point) return
+            const start = dragRef.current
+            setDraft({
+              x: Math.min(start.x, point.x),
+              y: Math.min(start.y, point.y),
+              w: Math.abs(point.x - start.x),
+              h: Math.abs(point.y - start.y)
+            })
+          },
+          onPointerUp: (event: React.PointerEvent) => {
+            const start = dragRef.current
+            dragRef.current = null
+            const point = pointOnPage(event)
+            if (!start || !point) {
+              setDraft(null)
+              return
+            }
+            if (props.tool === 'note') {
+              // A tap places the note; a drag was meant as a scroll.
+              if (Math.hypot(point.x - start.x, point.y - start.y) > 0.02) return
+              props.onPlaceAnnotation(pageNumber, 'note', {
+                x: Math.min(1 - NOTE_SIZE.w, Math.max(0, point.x - NOTE_SIZE.w / 2)),
+                y: Math.min(1 - NOTE_SIZE.h, Math.max(0, point.y - NOTE_SIZE.h / 2)),
+                ...NOTE_SIZE
+              })
+              return
+            }
+            const rect = {
+              x: Math.min(start.x, point.x),
+              y: Math.min(start.y, point.y),
+              w: Math.abs(point.x - start.x),
+              h: Math.abs(point.y - start.y)
+            }
+            setDraft(null)
+            // Ignore an accidental tap that drew nothing.
+            if (rect.w < 0.02 || rect.h < 0.01) return
+            props.onPlaceAnnotation(pageNumber, 'area', rect)
+          },
+          onPointerCancel: () => {
+            dragRef.current = null
+            setDraft(null)
+          }
+        }
+
   return (
     <div
       ref={containerRef}
@@ -177,6 +256,25 @@ function PdfPageImpl(props: PdfPageProps): React.JSX.Element {
               }}
             />
           ))}
+        </div>
+      )}
+      {captureHandlers && (
+        <div
+          className={`pm-capture-layer ${props.tool}`}
+          {...captureHandlers}
+          role="presentation"
+        >
+          {draft && (
+            <div
+              className="pm-area-draft"
+              style={{
+                left: `${draft.x * 100}%`,
+                top: `${draft.y * 100}%`,
+                width: `${draft.w * 100}%`,
+                height: `${draft.h * 100}%`
+              }}
+            />
+          )}
         </div>
       )}
       {visible && links.length > 0 && (

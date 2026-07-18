@@ -239,9 +239,53 @@ try {
   if (!wakeOk) throw new Error('wake lock path threw')
   console.log('12. 화면 꺼짐 방지 경로 안전 ✓')
 
+  // ---- E. Placement annotation without a text selection (scanned-PDF path) ----
+  // Close search first: its results panel overlays the page area.
+  await evalJs(`document.querySelector('.reader-search button[aria-label="검색 닫기"]')?.click(); true`)
+  await delay(300)
+  await evalJs(`document.querySelector('.reader-topbar button[aria-label="주석 도구"]').click(); true`)
+  await waitFor('tool bar', `!!document.querySelector('.reader-tool-bar')`)
+  await evalJs(`[...document.querySelectorAll('.reader-tool-bar .column-step')]
+    .find(b => b.textContent.includes('메모 찍기')).click(); true`)
+  await waitFor('note capture layer', `!!document.querySelector('.pm-capture-layer.note')`)
+  // Every page carries its own capture layer; pick the one actually on screen.
+  const box = await evalJs(`(() => {
+    const layers = [...document.querySelectorAll('.pm-capture-layer.note')]
+    const mid = window.innerHeight / 2
+    const hit = layers.find(el => {
+      const r = el.getBoundingClientRect()
+      return r.top < mid && r.bottom > mid
+    }) || layers[0]
+    const r = hit.getBoundingClientRect()
+    return { x: Math.round(r.x + r.width / 2), y: Math.round(mid), page: hit.closest('.pm-page')?.dataset.pageNumber }
+  })()`)
+  console.log(`    (메모 배치 대상: ${box.page}쪽, 좌표 ${box.x},${box.y})`)
+  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: box.x, y: box.y, button: 'left', clickCount: 1 })
+  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: box.x, y: box.y, button: 'left', clickCount: 1 })
+  const noteMade = await waitFor('note annotation placed',
+    `document.querySelectorAll('.pm-annotation.note').length`, 8000)
+  console.log(`14. 텍스트 선택 없이 메모 주석 생성 ✓ (${noteMade}개)`)
+  // The memo editor should open straight away.
+  await waitFor('note editor', `!!document.querySelector('.sheet')`)
+  await evalJs(`[...document.querySelectorAll('.sheet button')].find(b => /닫기|취소|저장/.test(b.textContent))?.click(); true`)
+  console.log('15. 메모 편집 시트 자동 열림 ✓')
+
+  // ---- F. Resume card + sort control on the library ----
+  await evalJs(`history.back(); true`)
+  await delay(500)
+  await evalJs(`(() => { const r = document.querySelector('.reader'); if (r) history.back(); return true })()`)
+  await waitFor('library visible', `!!document.querySelector('.library-screen')`, 8000)
+  const resume = await waitFor('resume card', `document.querySelector('.resume-title')?.textContent || ''`, 8000)
+  console.log(`16. "이어서 읽기" 카드 노출 ✓ ("${resume.slice(0, 24)}…")`)
+  const sorts = await evalJs(`document.querySelectorAll('.sort-row .segment').length`)
+  if (sorts !== 4) throw new Error(`expected 4 sort options, got ${sorts}`)
+  await evalJs(`[...document.querySelectorAll('.sort-row .segment')].find(b => b.textContent.includes('제목순')).click(); true`)
+  const persisted = await waitFor('sort persisted', `localStorage.getItem('aicore.sort') === 'title'`)
+  console.log(`17. 정렬 옵션 ${sorts}종 · 선택 저장됨 ✓ (${persisted})`)
+
   const nativeUsed = await evalJs(`window.__nativeUsed`)
   if (nativeUsed) throw new Error('네이티브 대화상자가 호출됨!')
-  console.log('13. 네이티브 대화상자 호출 0회 ✓')
+  console.log('18. 네이티브 대화상자 호출 0회 ✓')
 
   console.log('\nGUI VERIFY PASSED')
   cleanup()
